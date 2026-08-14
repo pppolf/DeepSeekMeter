@@ -222,6 +222,80 @@ Check(Formatting.TokenString(123456789) == "1.23亿", "Token 亿单位");
 Check(Formatting.TokenString(23456) == "2.3万", "Token 万单位");
 Check(Formatting.ModelDisplayName("deepseek-v4-pro") == "v4-pro", "模型显示名");
 
+// 8. 数据可信度状态（旧数据掩盖错误的判定）
+Check(DataState.Evaluate("", false, false, false) == DataStatus.NotLoggedIn, "空 Token 未登录");
+Check(DataState.Evaluate(null, false, false, false) == DataStatus.NotLoggedIn, "null Token 未登录");
+Check(DataState.Evaluate("tok", true, true, false) == DataStatus.TokenExpired, "登录过期优先于旧数据");
+Check(DataState.Evaluate("tok", true, false, true) == DataStatus.TokenExpired, "登录过期优先于普通错误");
+Check(DataState.Evaluate("tok", false, true, false) == DataStatus.Fresh, "有数据无错误为最新");
+Check(DataState.Evaluate("tok", false, true, true) == DataStatus.Stale, "有数据有错误为旧数据（Stale）");
+Check(DataState.Evaluate("tok", false, false, true) == DataStatus.Error, "无数据有错误为异常");
+Check(DataState.Evaluate("tok", false, false, false) == DataStatus.Loading, "已登录无数据为加载中");
+
+// 9. 非人民币币种（费用展示不写死 ¥）
+Check(Formatting.CurrencySymbol("USD") == "$", "USD -> $");
+Check(Formatting.CurrencySymbol("EUR") == "€", "EUR -> €");
+Check(Formatting.CurrencySymbol("CNY") == "¥", "CNY -> ¥");
+Check(Formatting.Format(12.5) == "12.50", "USD 金额格式化");
+Check($"累计 {Formatting.CurrencySymbol("USD")}{Formatting.Format(12.5)}" == "累计 $12.50", "USD 费用文案");
+
+// 10. 空 data / 空 biz_data / 非法刷新间隔 / 设置保存失败
+var emptyDataResp = JsonSerializer.Deserialize<PlatformEnvelope<BizWrapper<UsageData>>>(
+    """{"code":0,"msg":"","data":null}""", Json.Options)!;
+Check(emptyDataResp.Data is null, "空 data 解码为 null");
+
+var emptyBizResp = JsonSerializer.Deserialize<PlatformEnvelope<BizWrapper<UsageData>>>(
+    """{"code":0,"msg":"","data":{"biz_code":0,"biz_msg":"","biz_data":null}}""", Json.Options)!;
+Check(emptyBizResp.Data is not null && emptyBizResp.Data.BizData is null, "空 biz_data 解码为 null");
+
+var badIntervalFile = Path.Combine(Path.GetTempPath(), $"dsm-badinterval-{Guid.NewGuid():N}.json");
+try
+{
+    File.WriteAllText(badIntervalFile, """{"RefreshInterval": 3}""");
+    var s = new SettingsStore(badIntervalFile);
+    Check(Math.Abs(s.RefreshInterval - 60) < 0.001, "非法刷新间隔回退 60 秒");
+    File.WriteAllText(badIntervalFile, """{"RefreshInterval": 300}""");
+    var s2 = new SettingsStore(badIntervalFile);
+    Check(Math.Abs(s2.RefreshInterval - 300) < 0.001, "合法刷新间隔保留 300 秒");
+}
+finally
+{
+    if (File.Exists(badIntervalFile)) File.Delete(badIntervalFile);
+}
+
+// 设置保存失败：把设置文件路径指向一个已存在的目录，File.Move 到目录会失败
+var dirAsFile = Path.Combine(Path.GetTempPath(), $"dsm-dir-{Guid.NewGuid():N}");
+Directory.CreateDirectory(dirAsFile);
+try
+{
+    var store3 = new SettingsStore(dirAsFile);
+    var failed = false;
+    store3.SaveFailed += _ => failed = true;
+    store3.RefreshInterval = 300; // 触发保存
+    Check(failed, "设置保存失败触发 SaveFailed 事件");
+    Check(!store3.LastSaveSucceeded, "设置保存失败后 LastSaveSucceeded 为 false");
+}
+finally
+{
+    if (Directory.Exists(dirAsFile)) Directory.Delete(dirAsFile, true);
+}
+
+// 11. 趋势日期排序与未来过滤（用真实今天，不用数据最大日期）
+var trendToday = DateTime.Today;
+var tomorrow = trendToday.AddDays(1).ToString("yyyy-MM-dd");
+var sortedDates = new List<UsageDay>
+{
+    new() { Date = "2026-08-03", Data = [] },
+    new() { Date = "2026-08-01", Data = [] },
+    new() { Date = tomorrow, Data = [] }, // 未来日期应被过滤
+};
+var sorted = sortedDates
+    .Where(d => string.CompareOrdinal(d.Date, trendToday.ToString("yyyy-MM-dd")) <= 0)
+    .OrderBy(d => d.Date, StringComparer.Ordinal)
+    .ToList();
+Check(sorted.Count == 2, "未来日期被过滤");
+Check(sorted[0].Date == "2026-08-01" && sorted[1].Date == "2026-08-03", "日期升序排序");
+
 if (failures > 0)
 {
     Console.WriteLine($"\n❌ {failures} 项未通过");
