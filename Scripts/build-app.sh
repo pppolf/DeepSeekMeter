@@ -28,7 +28,7 @@ if [ -f "$BUILD_DIR/AppIcon.icns" ]; then
 fi
 
 # 签名：优先 Developer ID（消除 Gatekeeper 提示），否则 ad-hoc
-DEV_ID=$(security find-identity -v -p codesigning 2>/dev/null | grep "Developer ID Application" | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
+DEV_ID=$(security find-identity -v -p codesigning 2>/dev/null | grep "Developer ID Application" | head -1 | sed -E 's/.*"([^"]+)".*/\1/' || true)
 if [ -n "$DEV_ID" ]; then
   echo "==> Developer ID 签名：$DEV_ID"
   codesign --force --deep --options runtime --timestamp --sign "$DEV_ID" "$APP_DIR"
