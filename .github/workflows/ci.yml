@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build-and-test:
+    name: Build & Test (macOS)
+    runs-on: macos-15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Toolchain
+        run: swift --version
+
+      - name: Build (debug)
+        run: swift build
+
+      - name: Build (release)
+        run: swift build -c release
+
+      - name: Run self-tests
+        run: bash Scripts/run-tests.sh
+
+      - name: Package .app
+        run: bash Scripts/build-app.sh release
+
+      - name: Smoke check (launch 6s)
+        run: |
+          ./build/DeepSeekMeter.app/Contents/MacOS/DeepSeekMeter &
+          APP_PID=$!
+          sleep 6
+          if kill -0 $APP_PID 2>/dev/null; then
+            echo "进程存活 ✓"
+            kill $APP_PID
+          else
+            echo "进程崩溃 ✗"
+            exit 1
+          fi
+
+      - name: Upload .app artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: DeepSeekMeter.app
+          path: build/DeepSeekMeter.app

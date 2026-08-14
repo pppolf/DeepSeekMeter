@@ -1,0 +1,39 @@
+name: Release
+
+# 推送 v* 标签（如 v0.1.0）时自动构建并发布 GitHub Release
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  release:
+    name: Build & Publish
+    runs-on: macos-15
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build release .app
+        run: bash Scripts/build-app.sh release
+
+      - name: Read version
+        run: |
+          V=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" build/DeepSeekMeter.app/Contents/Info.plist)
+          echo "VERSION=$V" >> $GITHUB_ENV
+          echo "版本：$V"
+
+      - name: Package DMG（拖拽安装）
+        run: |
+          STAGE=$(mktemp -d)
+          cp -R build/DeepSeekMeter.app "$STAGE/"
+          ln -s /Applications "$STAGE/Applications"
+          hdiutil create -volname "DeepSeekMeter" -srcfolder "$STAGE" -ov -format UDZO "build/DeepSeekMeter-${VERSION}-macOS.dmg"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            build/DeepSeekMeter-*-macOS.dmg
+          generate_release_notes: true

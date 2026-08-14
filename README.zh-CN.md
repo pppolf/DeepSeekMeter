@@ -2,6 +2,7 @@
 
 [![Release](https://img.shields.io/github/v/release/pppolf/DeepSeekMeter)](https://github.com/pppolf/DeepSeekMeter/releases)
 [![License](https://img.shields.io/github/license/pppolf/DeepSeekMeter)](LICENSE)
+[![CI](https://github.com/pppolf/DeepSeekMeter/actions/workflows/ci.yml/badge.svg)](https://github.com/pppolf/DeepSeekMeter/actions/workflows/ci.yml)
 ![macOS](https://img.shields.io/badge/macOS-14%2B-blue)
 [English](README.md)
 
