@@ -4,9 +4,10 @@
 [![License](https://img.shields.io/github/license/pppolf/DeepSeekMeter)](LICENSE)
 [![CI](https://github.com/pppolf/DeepSeekMeter/actions/workflows/ci.yml/badge.svg)](https://github.com/pppolf/DeepSeekMeter/actions/workflows/ci.yml)
 ![macOS](https://img.shields.io/badge/macOS-14%2B-blue)
+![Windows](https://img.shields.io/badge/Windows-10%2B-blue)
 [中文版](README.zh-CN.md)
 
-A lightweight **macOS menu bar app** that keeps an eye on your DeepSeek account: balance, spending and token usage at a glance. Click the menu bar icon to open a popover with real-time stats.
+A lightweight **macOS menu bar app** that keeps an eye on your DeepSeek account: balance, spending and token usage at a glance. Click the menu bar icon to open a popover with real-time stats. A **Windows version** (system tray) with the same features lives in [`windows/`](windows/README.md).
 
 ## ✨ Features
 
@@ -25,8 +26,8 @@ A lightweight **macOS menu bar app** that keeps an eye on your DeepSeek account:
 
 ## 📋 Requirements
 
-- macOS 14+ (Apple Silicon or Intel)
-- Xcode Command Line Tools (`xcode-select --install`) — only needed to build from source
+- **macOS**: macOS 14+ (Apple Silicon or Intel); Xcode Command Line Tools (`xcode-select --install`) — only needed to build from source
+- **Windows**: Windows 10 (1809+) or 11; [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0) — only needed to build from source (WebView2 Runtime ships with the OS)
 
 ## ⬇️ Install
 
@@ -43,6 +44,15 @@ swift run                       # run in dev mode
 ./Scripts/build-app.sh          # build build/DeepSeekMeter.app
 ./Scripts/install.sh            # build, install to /Applications and launch
 ```
+
+### Windows (from source)
+
+```powershell
+dotnet build windows/DeepSeekMeter.sln -c Release
+dotnet run --project windows/src/DeepSeekMeter -c Release
+```
+
+See [`windows/README.md`](windows/README.md) for details.
 
 ## 🚀 Quick Start
 
@@ -68,10 +78,12 @@ Sources/DeepSeekMeter/           App sources (SwiftUI + AppKit)
   PlatformService.swift          Platform API client
 Scripts/                         Info.plist / build / install / icon / tests
 Scripts/selftest/                Lightweight unit tests (no Xcode needed)
+windows/                         Windows version (.NET 8 + WPF, see windows/README.md)
 ```
 
 ```bash
-./Scripts/run-tests.sh           # run self-tests
+./Scripts/run-tests.sh           # run macOS self-tests
+dotnet run --project windows/tests/DeepSeekMeter.Selftest -c Release   # run Windows self-tests
 ```
 
 ## ❓ FAQ

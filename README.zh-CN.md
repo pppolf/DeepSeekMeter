@@ -4,9 +4,10 @@
 [![License](https://img.shields.io/github/license/pppolf/DeepSeekMeter)](LICENSE)
 [![CI](https://github.com/pppolf/DeepSeekMeter/actions/workflows/ci.yml/badge.svg)](https://github.com/pppolf/DeepSeekMeter/actions/workflows/ci.yml)
 ![macOS](https://img.shields.io/badge/macOS-14%2B-blue)
+![Windows](https://img.shields.io/badge/Windows-10%2B-blue)
 [English](README.md)
 
-一个轻量的 **macOS 菜单栏小工具**：实时查看 DeepSeek 账户的余额、消费和 Token 用量。点击菜单栏图标弹出悬浮窗，数据一目了然。
+一个轻量的 **macOS 菜单栏小工具**：实时查看 DeepSeek 账户的余额、消费和 Token 用量。点击菜单栏图标弹出悬浮窗，数据一目了然。同时提供**功能对齐的 Windows 版**（系统托盘），代码在 [`windows/`](windows/README.md)。
 
 ## ✨ 功能
 
@@ -25,8 +26,8 @@
 
 ## 📋 环境要求
 
-- macOS 14+（Apple Silicon / Intel 均可）
-- Xcode Command Line Tools（`xcode-select --install`）——仅源码构建需要
+- **macOS**：macOS 14+（Apple Silicon / Intel 均可）；Xcode Command Line Tools（`xcode-select --install`）——仅源码构建需要
+- **Windows**：Windows 10（1809+）/ 11；[.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0)——仅源码构建需要（WebView2 Runtime 随系统预装）
 
 ## ⬇️ 安装
 
@@ -55,6 +56,15 @@ swift run                       # 开发模式直接跑
 ./Scripts/install.sh            # 构建 + 安装到 /Applications 并启动
 ```
 
+### Windows 从源码构建
+
+```powershell
+dotnet build windows/DeepSeekMeter.sln -c Release
+dotnet run --project windows/src/DeepSeekMeter -c Release
+```
+
+详见 [windows/README.md](windows/README.md)。
+
 ## 🚀 快速开始
 
 1. 启动应用，菜单栏出现 🐳 图标
@@ -79,10 +89,12 @@ Sources/DeepSeekMeter/           App 源码（SwiftUI + AppKit）
   PlatformService.swift          平台接口客户端
 Scripts/                         构建 / 安装 / 图标 / 自测脚本
 Scripts/selftest/                轻量单元测试（无需 Xcode）
+windows/                         Windows 版（.NET 8 + WPF，详见 windows/README.md）
 ```
 
 ```bash
-./Scripts/run-tests.sh           # 运行自测
+./Scripts/run-tests.sh           # 运行 macOS 自测
+dotnet run --project windows/tests/DeepSeekMeter.Selftest -c Release   # 运行 Windows 自测
 ```
 
 ## ❓ 常见问题
