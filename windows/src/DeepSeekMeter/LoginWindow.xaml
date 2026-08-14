@@ -3,9 +3,10 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
         Title="登录 DeepSeek 平台"
-        Width="480" Height="660"
+        Width="520" Height="700"
+        MinWidth="440" MinHeight="520"
         WindowStartupLocation="CenterScreen"
-        ResizeMode="CanMinimize">
+        ResizeMode="CanResize">
 
     <Grid>
         <Grid.RowDefinitions>
@@ -14,11 +15,15 @@
         </Grid.RowDefinitions>
 
         <!-- 顶部状态栏（对齐 macOS 版 topBar） -->
-        <Border Grid.Row="0" Background="#F3F3F6" BorderBrush="#E0E0E6" BorderThickness="0,0,0,1" Padding="12,8">
+        <Border Grid.Row="0" Background="#F3F3F6" BorderBrush="#E0E0E6" BorderThickness="0,0,0,1" Padding="12,9">
             <Grid>
-                <TextBlock x:Name="StatusText" Text="正在打开官方登录页…" FontSize="11" Foreground="#888888"
-                           VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
-                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock x:Name="StatusText" Grid.Column="0" Text="正在打开官方登录页…" FontSize="11" Foreground="#888888"
+                           VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Margin="0,0,10,0" />
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                     <Button Content="手动粘贴 Token" FontSize="11" Padding="10,3" Margin="0,0,8,0"
                             Background="Transparent" BorderBrush="#CCCCCC" Foreground="#333333"
                             Cursor="Hand" Click="OnManualTokenClick" />

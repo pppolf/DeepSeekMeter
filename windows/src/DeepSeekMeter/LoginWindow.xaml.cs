@@ -111,7 +111,21 @@ public partial class LoginWindow : Window
             var result = await WebView.CoreWebView2.ExecuteScriptAsync(js);
             if (string.IsNullOrEmpty(result)) { SetStatus("等待登录完成…"); return; }
 
-            using var doc = JsonDocument.Parse(result);
+            // 关键：WebView2 的 ExecuteScriptAsync 返回的是「JSON 编码后的结果」，
+            // 脚本返回字符串时外层是带引号转义的 JSON 字符串字面量（如 "\"{\"ok\":true...}\""），
+            // 需先反序列化出字符串，再解析其中的 JSON 对象（与 macOS WKWebView 直接返回字符串不同）。
+            string innerJson;
+            try
+            {
+                innerJson = JsonSerializer.Deserialize<string>(result) ?? "";
+            }
+            catch (JsonException)
+            {
+                SetStatus("等待登录完成…");
+                return;
+            }
+
+            using var doc = JsonDocument.Parse(innerJson);
             var root = doc.RootElement;
             if (!root.TryGetProperty("ok", out var ok) || !ok.GetBoolean()) { SetStatus("等待登录完成…"); return; }
             if (!root.TryGetProperty("data", out var data) || data.ValueKind != JsonValueKind.Object)
