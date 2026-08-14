@@ -1,0 +1,33 @@
+name: 💡 功能建议
+description: 提出一个新功能或改进想法
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        建议先搜索已有 Issue（含已关闭的），避免重复提交。
+  - type: textarea
+    id: need
+    attributes:
+      label: 需求描述
+      description: 你希望解决什么问题 / 获得什么能力？
+    validations:
+      required: true
+  - type: textarea
+    id: propose
+    attributes:
+      label: 方案建议
+      description: 你设想的实现方式或交互（可选）
+  - type: textarea
+    id: alternative
+    attributes:
+      label: 替代方案
+      description: 目前的变通做法（可选）
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: 边界确认
+      options:
+        - label: 我理解该项目保持零第三方依赖、单 target、macOS 14+ 的边界
+          required: true

@@ -92,6 +92,10 @@ Scripts/selftest/                轻量单元测试（无需 Xcode）
 - **如何退出？** 菜单栏图标 → 悬浮窗「退出」。
 - **如何卸载？** 删除 `/Applications/DeepSeekMeter.app` 和 `~/Library/Preferences/com.deepseek.meter.plist`。
 
+## 🤝 贡献
+
+欢迎贡献！请先阅读 [CONTRIBUTING.zh-CN.md](CONTRIBUTING.zh-CN.md)（英文版见 [CONTRIBUTING.md](CONTRIBUTING.md)）——包含构建/测试命令、代码与提交规范，以及项目边界。使用 AI 编码助手时，它会遵循仓库根目录 [AGENTS.md](AGENTS.md) 的操作规范。
+
 ## 📄 开源协议
 
 [MIT](LICENSE) © 2026 pppolf

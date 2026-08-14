@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 使用 / 安装问题
+    url: https://github.com/pppolf/DeepSeekMeter/discussions
+    about: 使用、安装、登录等问题请先查阅 README 常见问题，或到 Discussions 提问

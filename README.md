@@ -81,6 +81,10 @@ Scripts/selftest/                Lightweight unit tests (no Xcode needed)
 - **How to quit?** Menu bar icon → **Quit** in the popover.
 - **How to uninstall?** Remove `/Applications/DeepSeekMeter.app` and `~/Library/Preferences/com.deepseek.meter.plist`.
 
+## 🤝 Contributing
+
+Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) first — it covers build/test commands, code & commit conventions, and the project's boundaries ([中文版](CONTRIBUTING.zh-CN.md)). If you use an AI coding agent, it will follow the operating rules in [AGENTS.md](AGENTS.md).
+
 ## 📄 License
 
 [MIT](LICENSE) © 2026 pppolf

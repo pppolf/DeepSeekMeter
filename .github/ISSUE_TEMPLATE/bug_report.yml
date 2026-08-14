@@ -1,0 +1,63 @@
+name: 🐛 Bug 报告
+description: 提交一个 Bug，帮助我们改进 DeepSeekMeter
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢反馈！请尽量提供完整信息，便于快速定位问题。
+        > ⚠️ 请勿在日志或截图中包含真实平台 Token。
+  - type: input
+    id: version
+    attributes:
+      label: 应用版本
+      description: Release 页面或悬浮窗中的版本号
+      placeholder: "0.0.1"
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: 安装方式
+      options:
+        - Release 下载（DMG）
+        - 源码构建（build-app.sh / install.sh）
+        - swift run 开发模式
+    validations:
+      required: true
+  - type: input
+    id: macos
+    attributes:
+      label: macOS 版本
+      description: 例如 15.4（苹果菜单 → 关于本机）
+      placeholder: "15.4"
+    validations:
+      required: true
+  - type: textarea
+    id: describe
+    attributes:
+      label: 问题描述
+      description: 发生了什么？期望的行为是什么？
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: 复现步骤
+      placeholder: |
+        1. 打开应用
+        2. 点击菜单栏图标
+        3. 观察到……
+  - type: textarea
+    id: logs
+    attributes:
+      label: 日志 / 截图
+      description: 控制台输出、截图等（注意打码真实 Token）
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: 确认
+      options:
+        - label: 我已确认日志与截图中不包含真实 Token
+          required: true
