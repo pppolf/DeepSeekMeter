@@ -19,6 +19,8 @@ check(format(1234.5) == "1234.5", "format(1234.5) -> 1234.5")
 check(currencySymbol("CNY") == "¥", "CNY -> ¥")
 check(currencySymbol("USD") == "$", "USD -> $")
 check(currencySymbol("EUR") == "€", "EUR -> €")
+check(currencySymbol("HKD") == "HK$", "HKD -> HK$")
+check(currencySymbol("GBP") == "£", "GBP -> £")
 check(currencySymbol("XXX") == "XXX", "未知币种原样返回")
 
 func XCTUnwrapSafe<T>(_ value: T?) throws -> T {

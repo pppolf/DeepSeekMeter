@@ -15,6 +15,8 @@ func currencySymbol(_ code: String) -> String {
     case "USD": return "$"
     case "EUR": return "€"
     case "JPY", "KRW": return "¥"
+    case "HKD": return "HK$"
+    case "GBP": return "£"
     default: return code
     }
 }
