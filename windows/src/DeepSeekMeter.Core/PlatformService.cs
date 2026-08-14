@@ -107,6 +107,8 @@ public sealed class PlatformService
     {
         var response = await GetAsync<CurrentUserResponse>("/auth-api/v0/users/current", token, ct);
         EnsureSuccess(response.Code, response.Msg);
+        if (response.Data is not null)
+            EnsureBizSuccess(response.Data.BizCode, response.Data.BizMsg);
         var user = response.Data?.BizData;
         return new UserInfo(user?.Email ?? "", user?.Currency ?? "CNY");
     }
@@ -116,7 +118,10 @@ public sealed class PlatformService
     {
         var response = await GetAsync<SummaryResponse>("/api/v0/users/get_user_summary", token, ct);
         EnsureSuccess(response.Code, response.Msg);
-        return response.Data?.BizData
+        if (response.Data is null)
+            throw PlatformException.Api(response.Code, "summary 为空");
+        EnsureBizSuccess(response.Data.BizCode, response.Data.BizMsg);
+        return response.Data.BizData
             ?? throw PlatformException.Api(response.Code, "summary 为空");
     }
 
@@ -125,7 +130,10 @@ public sealed class PlatformService
     {
         var response = await GetAsync<AmountResponse>($"/api/v0/usage/amount?month={month}&year={year}", token, ct);
         EnsureSuccess(response.Code, response.Msg);
-        return response.Data?.BizData
+        if (response.Data is null)
+            throw PlatformException.Api(response.Code, "amount 为空");
+        EnsureBizSuccess(response.Data.BizCode, response.Data.BizMsg);
+        return response.Data.BizData
             ?? throw PlatformException.Api(response.Code, "amount 为空");
     }
 
@@ -134,7 +142,10 @@ public sealed class PlatformService
     {
         var response = await GetAsync<CostResponse>($"/api/v0/usage/cost?month={month}&year={year}", token, ct);
         EnsureSuccess(response.Code, response.Msg);
-        var first = response.Data?.BizData?.FirstOrDefault()
+        if (response.Data is null)
+            throw PlatformException.Api(response.Code, "cost 为空");
+        EnsureBizSuccess(response.Data.BizCode, response.Data.BizMsg);
+        var first = response.Data.BizData?.FirstOrDefault()
             ?? throw PlatformException.Api(response.Code, "cost 为空");
         return first;
     }
@@ -187,6 +198,17 @@ public sealed class PlatformService
     {
         if (code != 0)
             throw PlatformException.Api(code, msg);
+    }
+
+    /// <summary>
+    /// 业务层成功判断：data.biz_code 非 0 时抛 Api 异常，
+    /// 避免平台业务错误（biz_code != 0）被当成成功数据。
+    /// internal 以便 selftest 直接覆盖 biz_code 非 0 场景。
+    /// </summary>
+    internal static void EnsureBizSuccess(int bizCode, string bizMsg)
+    {
+        if (bizCode != 0)
+            throw PlatformException.Api(bizCode, bizMsg);
     }
 
     // MARK: - 响应 DTO（与 macOS 版保持相同结构）

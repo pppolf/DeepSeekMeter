@@ -86,6 +86,29 @@ catch (Exception ex)
     Check(false, $"summary 解码抛错：{ex.Message}");
 }
 
+// 4b. 业务层 biz_code 非 0：应被识别为错误（不被当成成功数据）
+var bizErrJson = """
+{"code":0,"msg":"","data":{"biz_code":10001,"biz_msg":"业务层错误","biz_data":null}}
+""";
+try
+{
+    var bizResp = JsonSerializer.Deserialize<PlatformEnvelope<BizWrapper<UsageData>>>(bizErrJson, Json.Options)!;
+    Check(bizResp.Data is not null && bizResp.Data.BizCode == 10001, "biz_code 非 0 正确解码");
+    try
+    {
+        PlatformService.EnsureBizSuccess(bizResp.Data!.BizCode, bizResp.Data.BizMsg);
+        Check(false, "biz_code 非 0 应抛 Api 异常");
+    }
+    catch (PlatformException ex)
+    {
+        Check(ex.ApiCode == 10001 && ex.Kind == PlatformErrorKind.Api, "biz_code 非 0 抛 Api(code=10001)");
+    }
+}
+catch (Exception ex)
+{
+    Check(false, $"biz_code 样例抛错：{ex.Message}");
+}
+
 // 5. MonthUsage 聚合（本月汇总 / 按日查询）
 var month = new MonthUsage
 {
@@ -143,6 +166,29 @@ Check(tokens.Requests == 3, "MonthUsage 当日请求");
 Check(Math.Abs(tokens.Response - 200) < 0.001, "MonthUsage 当日输出");
 Check(Math.Abs(month.CostOn(today) - 0) < 0.001, "MonthUsage 当日费用（无数据返回 0）");
 Check(Math.Abs(month.CostOn(new DateTime(2026, 8, 2)) - 0) < 0.001, "MonthUsage 无数据日期返回 0");
+
+// 5b. 空 AmountDays（无用量 / 空 days / 新账号）不得抛异常
+var emptyMonth = new MonthUsage
+{
+    Year = 2026,
+    Month = 8,
+    AmountModels = [],
+    CostModels = [],
+    CostDays = [],
+    AmountDays = [],
+};
+try
+{
+    Check(emptyMonth.LatestAmountDate is null, "空 AmountDays 的 LatestAmountDate 为 null");
+    Check(Math.Abs(emptyMonth.TotalCost - 0) < 0.001, "空 AmountDays 本月费用为 0");
+    Check(emptyMonth.TotalRequests == 0, "空 AmountDays 请求数为 0");
+    var emptyTokens = emptyMonth.TokensOn(DateTime.Now);
+    Check(emptyTokens.Requests == 0 && emptyTokens.Response == 0, "空 AmountDays TokensOn 返回 0");
+}
+catch (Exception ex)
+{
+    Check(false, $"空 AmountDays 抛异常：{ex.Message}");
+}
 
 // 6. 设置持久化（临时目录往返）
 var tmpFile = Path.Combine(Path.GetTempPath(), $"dsm-settings-{Guid.NewGuid():N}.json");

@@ -139,6 +139,9 @@ public sealed class MonthUsage
     public double ResponseTokens => SumAmount("RESPONSE_TOKEN");
     public int TotalRequests => AmountModels.Sum(m => m.Requests);
 
+    /// <summary>最新用量日期；amountDays 为空时为 null（避免空集合 Max 崩溃）。</summary>
+    public string? LatestAmountDate => AmountDays.Count == 0 ? null : AmountDays.Max(d => d.Date);
+
     // MARK: - 按日查询
 
     public double CostOn(DateTime date)

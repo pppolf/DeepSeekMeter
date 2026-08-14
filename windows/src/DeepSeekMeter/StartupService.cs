@@ -17,13 +17,17 @@ public static class StartupService
         return key?.GetValue(ValueName) is string v && !string.IsNullOrEmpty(v);
     }
 
-    /// <summary>启用：写入当前 exe 路径。返回是否成功。</summary>
+    /// <summary>启用：写入当前 exe 路径（带引号，路径含空格也能正常启动）。返回是否成功。</summary>
     public static bool Enable()
     {
         try
         {
+            var path = Environment.ProcessPath;
+            if (string.IsNullOrWhiteSpace(path)) return false;
+
             using var key = Registry.CurrentUser.CreateSubKey(RunKeyPath);
-            key.SetValue(ValueName, Environment.ProcessPath ?? "");
+            // 用引号包起来，避免「C:\Program Files\...\DeepSeekMeter.exe」这类含空格路径启动失败
+            key.SetValue(ValueName, $"\"{path}\"");
             return true;
         }
         catch (Exception ex)

@@ -14,6 +14,7 @@ public partial class App : System.Windows.Application
     private MainViewModel? _model;
     private TrayIconController? _tray;
     private Mutex? _singleInstanceMutex;
+    private bool _syncingLaunchAtLogin;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -48,14 +49,25 @@ public partial class App : System.Windows.Application
         }
     }
 
-    /// <summary>开机自启开关变更时同步注册表（对齐 macOS SMAppService）。</summary>
+    /// <summary>开机自启开关变更时同步注册表（对齐 macOS SMAppService）；失败则回滚，保证设置/UI/注册表一致。</summary>
     private void OnSettingsPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName != nameof(SettingsStore.LaunchAtLogin) || _settings is null) return;
-        if (_settings.LaunchAtLogin)
-            StartupService.Enable();
-        else
-            StartupService.Disable();
+        if (_syncingLaunchAtLogin) return; // 回滚触发的二次变更，避免递归
+
+        var ok = _settings.LaunchAtLogin ? StartupService.Enable() : StartupService.Disable();
+        if (ok) return;
+
+        // 注册表操作失败：回滚设置值，UI 通过 PropertyChanged 同步回原状态
+        _syncingLaunchAtLogin = true;
+        try
+        {
+            _settings.LaunchAtLogin = !_settings.LaunchAtLogin;
+        }
+        finally
+        {
+            _syncingLaunchAtLogin = false;
+        }
     }
 
     protected override void OnExit(ExitEventArgs e)

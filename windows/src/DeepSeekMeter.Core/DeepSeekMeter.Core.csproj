@@ -10,4 +10,9 @@
     <!-- 与仓库"零第三方依赖"红线对齐：Core 不引用任何 NuGet 包 -->
   </PropertyGroup>
 
+  <ItemGroup>
+    <!-- 允许轻量自测访问 internal（如 PlatformService.EnsureBizSuccess） -->
+    <InternalsVisibleTo Include="DeepSeekMeter.Selftest" />
+  </ItemGroup>
+
 </Project>
