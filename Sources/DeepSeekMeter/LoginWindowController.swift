@@ -90,6 +90,11 @@ final class LoginWindowController: NSObject, NSWindowDelegate, WKNavigationDeleg
 
     private func checkToken() {
         guard !isChecking, !tokenReceived, let webView else { return }
+        // 只在 DeepSeek 官方域名执行 localStorage Token 扫描，避免在第三方页面读取登录数据
+        guard Self.isDeepSeekDomain(webView.url) else {
+            setStatus("请在官方登录页登录…")
+            return
+        }
         isChecking = true
         let js = """
 (() => {
@@ -145,6 +150,12 @@ final class LoginWindowController: NSObject, NSWindowDelegate, WKNavigationDeleg
             let v = (pairs[key] as? String) ?? ""
             return "\(key)=\(v.count):\(String(v.prefix(16)))"
         }.joined(separator: "|")
+    }
+
+    /// 仅允许 DeepSeek 官方域名（*.deepseek.com）
+    private static func isDeepSeekDomain(_ url: URL?) -> Bool {
+        guard let host = url?.host else { return false }
+        return host == "deepseek.com" || host.hasSuffix(".deepseek.com")
     }
 
     private static func tokenCandidates(from pairs: [String: Any]) -> [String] {
@@ -220,6 +231,16 @@ final class LoginWindowController: NSObject, NSWindowDelegate, WKNavigationDeleg
     }
 
     // MARK: - OAuth 弹窗（共享数据存储，token 仍可在主窗口读到）
+
+    /// 外部链接（非 *.deepseek.com）交给系统浏览器，不在内嵌页打开
+    func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
+        if let url = navigationAction.request.url, !Self.isDeepSeekDomain(url) {
+            decisionHandler(.cancel)
+            NSWorkspace.shared.open(url)
+            return
+        }
+        decisionHandler(.allow)
+    }
 
     func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration, for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
         let config = configuration

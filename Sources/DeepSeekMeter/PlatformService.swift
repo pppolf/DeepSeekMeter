@@ -42,7 +42,7 @@ struct PlatformService {
 
     // MARK: - 接口
 
-    /// 校验 Token 并返回用户信息（email、currency）
+    /// 校验 Token 并返回用户信息（email、currency）；data / biz_data 为空视为校验失败
     func fetchCurrentUser(token: String) async throws -> (email: String, currency: String) {
         struct CurrentUserData: Decodable {
             let id: String
@@ -50,7 +50,9 @@ struct PlatformService {
             let currency: String?
         }
         struct CurrentUserBiz: Decodable {
-            let bizData: CurrentUserData
+            let bizCode: Int
+            let bizMsg: String
+            let bizData: CurrentUserData?
         }
         struct CurrentUserResponse: Decodable {
             let code: Int
@@ -59,14 +61,22 @@ struct PlatformService {
         }
         let response: CurrentUserResponse = try await get("/auth-api/v0/users/current", token: token)
         try ensureSuccess(response.code, msg: response.msg)
-        let user = response.data?.bizData
-        return (user?.email ?? "", user?.currency ?? "CNY")
+        guard let data = response.data else {
+            throw PlatformError.api(code: response.code, msg: "用户信息为空")
+        }
+        try ensureBizSuccess(data.bizCode, msg: data.bizMsg)
+        guard let user = data.bizData else {
+            throw PlatformError.api(code: response.code, msg: "用户信息为空")
+        }
+        return (user.email ?? "", user.currency ?? "CNY")
     }
 
     /// 平台侧账户汇总（余额 / 累计消费）
     func fetchSummary(token: String) async throws -> UserSummary {
         struct SummaryBiz: Decodable {
-            let bizData: UserSummary
+            let bizCode: Int
+            let bizMsg: String
+            let bizData: UserSummary?
         }
         struct SummaryResponse: Decodable {
             let code: Int
@@ -75,16 +85,22 @@ struct PlatformService {
         }
         let response: SummaryResponse = try await get("/api/v0/users/get_user_summary", token: token)
         try ensureSuccess(response.code, msg: response.msg)
-        guard let data = response.data?.bizData else {
+        guard let data = response.data else {
             throw PlatformError.api(code: response.code, msg: "summary 为空")
         }
-        return data
+        try ensureBizSuccess(data.bizCode, msg: data.bizMsg)
+        guard let bizData = data.bizData else {
+            throw PlatformError.api(code: response.code, msg: "summary 为空")
+        }
+        return bizData
     }
 
     /// 本月 token 用量（biz_data 是对象）
     func fetchUsageAmount(token: String, month: Int, year: Int) async throws -> UsageData {
         struct Biz: Decodable {
-            let bizData: UsageData
+            let bizCode: Int
+            let bizMsg: String
+            let bizData: UsageData?
         }
         struct Resp: Decodable {
             let code: Int
@@ -93,16 +109,22 @@ struct PlatformService {
         }
         let response: Resp = try await get("/api/v0/usage/amount?month=\(month)&year=\(year)", token: token)
         try ensureSuccess(response.code, msg: response.msg)
-        guard let data = response.data?.bizData else {
+        guard let data = response.data else {
             throw PlatformError.api(code: response.code, msg: "amount 为空")
         }
-        return data
+        try ensureBizSuccess(data.bizCode, msg: data.bizMsg)
+        guard let bizData = data.bizData else {
+            throw PlatformError.api(code: response.code, msg: "amount 为空")
+        }
+        return bizData
     }
 
     /// 本月费用（biz_data 是数组，取第一个）
     func fetchUsageCost(token: String, month: Int, year: Int) async throws -> UsageData {
         struct Biz: Decodable {
-            let bizData: [UsageData]
+            let bizCode: Int
+            let bizMsg: String
+            let bizData: [UsageData]?
         }
         struct Resp: Decodable {
             let code: Int
@@ -111,7 +133,11 @@ struct PlatformService {
         }
         let response: Resp = try await get("/api/v0/usage/cost?month=\(month)&year=\(year)", token: token)
         try ensureSuccess(response.code, msg: response.msg)
-        guard let first = response.data?.bizData.first else {
+        guard let data = response.data else {
+            throw PlatformError.api(code: response.code, msg: "cost 为空")
+        }
+        try ensureBizSuccess(data.bizCode, msg: data.bizMsg)
+        guard let first = data.bizData?.first else {
             throw PlatformError.api(code: response.code, msg: "cost 为空")
         }
         return first
@@ -155,6 +181,13 @@ struct PlatformService {
     }
 
     private func ensureSuccess(_ code: Int, msg: String) throws {
+        guard code == 0 else {
+            throw PlatformError.api(code: code, msg: msg)
+        }
+    }
+
+    /// 业务层成功判断：data.biz_code 非 0 时抛 Api 异常（对齐 Windows 版）
+    private func ensureBizSuccess(_ code: Int, msg: String) throws {
         guard code == 0 else {
             throw PlatformError.api(code: code, msg: msg)
         }

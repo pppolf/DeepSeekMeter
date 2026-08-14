@@ -16,6 +16,19 @@ final class AppModel: ObservableObject {
 
     @Published var isFetching = false
 
+    /// 当前账户币种（余额/登录接口返回，用于费用展示，不再写死 CNY）
+    @Published var currency: String = "CNY"
+
+    /// 数据可信度状态（托盘/悬浮窗/错误提示共用，保证一致）
+    var status: DataStatus {
+        dataStatus(
+            token: settings.platformToken,
+            tokenExpired: platformTokenExpired,
+            hasData: lastBalance != nil || monthUsage != nil,
+            hasError: lastError != nil || usageError != nil
+        )
+    }
+
     private let platformService = PlatformService()
     private var timer: Timer?
 
@@ -69,18 +82,24 @@ final class AppModel: ObservableObject {
         }
         do {
             let summary = try await platformService.fetchSummary(token: settings.platformToken)
-            if let wallet = summary.normalWallets.first {
-                let bonus = summary.bonusWallets.first?.value ?? 0
-                lastBalance = BalanceInfo(
-                    currency: wallet.currency,
-                    totalBalance: String(wallet.value),
-                    grantedBalance: String(bonus),
-                    toppedUpBalance: String(max(0, wallet.value - bonus))
-                )
-                lastUpdate = Date()
-                lastError = nil
+            guard let wallet = summary.normalWallets.first else {
+                // 接口成功但钱包列表为空：识别为明确空状态，不保留旧余额
+                lastBalance = nil
+                lastError = "余额数据为空"
+                return
             }
+            let bonus = summary.bonusWallets.first?.value ?? 0
+            lastBalance = BalanceInfo(
+                currency: wallet.currency,
+                totalBalance: String(wallet.value),
+                grantedBalance: String(bonus),
+                toppedUpBalance: String(max(0, wallet.value - bonus))
+            )
+            currency = wallet.currency
+            lastUpdate = Date()
+            lastError = nil
         } catch {
+            // 保留旧余额，仅标记错误（旧数据由 status=stale 标注「可能过期」）
             lastError = (error as? PlatformError)?.message ?? error.localizedDescription
             if case PlatformError.api(let code, _) = error, code == 40002 || code == 40003 {
                 platformTokenExpired = true
@@ -113,7 +132,9 @@ final class AppModel: ObservableObject {
             )
             usageError = nil
             platformTokenExpired = false
+            lastUpdate = Date() // 最后成功时间
         } catch {
+            // 保留旧用量，仅标记错误
             usageError = (error as? PlatformError)?.message ?? error.localizedDescription
             if case PlatformError.api(let code, _) = error, code == 40002 || code == 40003 {
                 platformTokenExpired = true
@@ -157,6 +178,7 @@ final class AppModel: ObservableObject {
             let user = try await platformService.fetchCurrentUser(token: trimmed)
             settings.platformToken = trimmed
             settings.platformUserName = user.email
+            currency = user.currency
             usageError = nil
             platformTokenExpired = false
             await fetchUsage()
@@ -178,5 +200,6 @@ final class AppModel: ObservableObject {
         lastBalance = nil
         lastError = nil
         platformTokenExpired = false
+        currency = "CNY"
     }
 }

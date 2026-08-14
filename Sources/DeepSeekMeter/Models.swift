@@ -140,3 +140,23 @@ struct MonthUsage: Identifiable {
         return formatter
     }()
 }
+
+// MARK: - 数据可信度状态（托盘/悬浮窗/错误提示共用，保证一致）
+
+enum DataStatus: Equatable {
+    case notLoggedIn  // 未登录
+    case loading      // 已登录但尚无数据
+    case fresh        // 最新数据，无错误
+    case stale        // 刷新失败，正在显示旧数据
+    case error        // 错误且无数据
+    case tokenExpired // 登录已过期
+}
+
+/// 数据状态判定（纯函数，可测）
+func dataStatus(token: String?, tokenExpired: Bool, hasData: Bool, hasError: Bool) -> DataStatus {
+    if token?.isEmpty ?? true { return .notLoggedIn }
+    if tokenExpired { return .tokenExpired }
+    if hasError { return hasData ? .stale : .error }
+    if hasData { return .fresh }
+    return .loading
+}

@@ -43,7 +43,8 @@ final class SettingsStore: ObservableObject {
         platformToken = defaults.string(forKey: Keys.platformToken) ?? ""
         platformUserName = defaults.string(forKey: Keys.platformUserName) ?? ""
         let saved = defaults.double(forKey: Keys.refreshInterval)
-        refreshInterval = saved > 0 ? saved : 60
+        // 刷新间隔只接受项目已有合法选项，损坏/非法值回退 1 分钟
+        refreshInterval = Self.intervalOptions.contains(saved) ? saved : 60
         launchAtLogin = defaults.bool(forKey: Keys.launchAtLogin)
 
         // 一次性迁移：旧版本把 Token 存在钥匙串（ad-hoc 签名导致每次启动都要密码授权）
