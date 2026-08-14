@@ -16,6 +16,12 @@ A lightweight **macOS menu bar app** that keeps an eye on your DeepSeek account:
 - ⏱️ **Auto refresh**: 15s – 10min intervals
 - 🚀 **Launch at login**
 
+## 📸 Screenshots
+
+| Logged in — balance, usage & token trend | Not logged in — one-click login guide |
+| :---: | :---: |
+| ![Logged in](images/pic-1.png) | ![Not logged in](images/pic-2.png) |
+
 ## 📋 Requirements
 
 - macOS 14+ (Apple Silicon or Intel)
