@@ -73,7 +73,7 @@ See [`windows/README.md`](windows/README.md) for details.
 
 - All data comes from DeepSeek's own platform endpoints (`get_user_summary`, `usage/amount`, `usage/cost`) using **your own login token** — nothing is sent anywhere else
 - The token is stored only in `~/Library/Preferences/com.deepseek.meter.plist` on your machine; use **Sign out** in the popover to remove it
-- Token usage data may lag the dashboard by a few minutes
+- Usage/cost statistics are **not real-time**: same-day figures may lag for hours or until the next day (the balance itself is deducted in real time)
 
 ## 🛠 Development
 
