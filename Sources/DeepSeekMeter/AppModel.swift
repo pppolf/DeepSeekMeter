@@ -167,6 +167,23 @@ final class AppModel: ObservableObject {
         }
     }
 
+    // MARK: - 平台登录（内嵌官方页面）
+
+    private var loginController: LoginWindowController?
+
+    /// 打开内嵌登录窗口：登录成功后自动获取并校验 Token
+    func beginPlatformLogin() {
+        loginController = LoginWindowController(
+            onToken: { [weak self] token, _ in
+                Task { @MainActor [weak self] in
+                    _ = await self?.savePlatformToken(token)
+                }
+            },
+            onCancel: {}
+        )
+        loginController?.show()
+    }
+
     func clearAPIKey() {
         settings.clearAPIKey()
         lastBalance = nil

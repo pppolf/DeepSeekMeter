@@ -41,14 +41,13 @@ open build/DeepSeekMeter.app
 
 首次启动会自动弹出悬浮窗 → 在「API Key」处粘贴 Key → 点「保存」，立即校验并开始显示余额。
 
-**要看到 Token 用量明细**，还需要「平台 Token」：
+**要看到 Token 用量明细**，还需要「平台 Token」——**一键登录获取，不用碰开发者工具**：
 
-1. 用浏览器打开 [platform.deepseek.com/usage](https://platform.deepseek.com/usage) 并登录
-2. 按 F12 打开开发者工具 → Network（网络）标签 → 刷新页面
-3. 点任意一个 `auth-api` 或 `api/v0` 请求 → Headers → 复制 `Authorization: Bearer <xxx>` 里 `<xxx>` 那一串
-4. 在悬浮窗「平台Token」处粘贴 → 保存，立即校验并显示本月用量
+1. 悬浮窗 → 平台Token 一行 → 点「**登录获取**」
+2. 弹出内嵌的官方登录页（[platform.deepseek.com](https://platform.deepseek.com)），正常登录即可（支持扫码/密码）
+3. 登录成功后 App **自动提取并校验 Token**，立即显示本月用量
 
-> 平台 Token 是浏览器登录态，过期后重新复制即可；API Key 只用于余额查询，两者可单独使用。
+> 也支持「手动粘贴」：F12 → Network → 任意 `auth-api` 请求 → 复制 `Authorization: Bearer <xxx>` 里的 `<xxx>`。平台 Token 是浏览器登录态，过期后在悬浮窗点「登录更新」重新获取即可。API Key 只用于余额查询，两者可单独使用。
 
 ## 使用说明
 

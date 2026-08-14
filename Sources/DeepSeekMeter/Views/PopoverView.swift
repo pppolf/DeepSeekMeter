@@ -187,13 +187,22 @@ struct PopoverView: View {
                         .foregroundStyle(.tertiary)
                 }
             } else {
-                HStack(spacing: 6) {
-                    Image(systemName: "person.badge.key")
-                        .foregroundStyle(.secondary)
-                    Text("配置平台 Token 后显示用量明细（费用 / Token / 请求）")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Spacer(minLength: 0)
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "person.badge.key")
+                            .foregroundStyle(.secondary)
+                        Text("配置平台 Token 后显示用量明细（费用 / Token / 请求）")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Spacer(minLength: 0)
+                    }
+                    Button {
+                        model.beginPlatformLogin()
+                    } label: {
+                        Label("一键登录获取 Token", systemImage: "arrow.right.circle")
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
                 }
             }
         }
@@ -324,24 +333,35 @@ struct PopoverView: View {
                     Button("保存") { savePlatformToken() }
                         .buttonStyle(.borderedProminent)
                         .controlSize(.small)
+                } else if model.settings.platformToken.isEmpty {
+                    Text("未配置")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Button("登录获取") { model.beginPlatformLogin() }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.small)
+                    Button("手动粘贴") {
+                        draftPlatformToken = ""
+                        showingPlatformTokenField = true
+                    }
+                    .buttonStyle(.link)
+                    .controlSize(.small)
                 } else {
-                    if model.settings.platformToken.isEmpty {
-                        Text("未配置")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    } else {
-                        Text("已配置 ✓")
-                            .font(.caption)
-                            .foregroundStyle(.green)
-                        if !model.settings.platformUserName.isEmpty {
-                            Text(model.settings.platformUserName)
-                                .font(.caption2)
-                                .foregroundStyle(.tertiary)
-                                .lineLimit(1)
-                        }
+                    Text("已配置 ✓")
+                        .font(.caption)
+                        .foregroundStyle(.green)
+                    if !model.settings.platformUserName.isEmpty {
+                        Text(model.settings.platformUserName)
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                            .lineLimit(1)
                     }
                     Spacer()
-                    Button(model.settings.platformToken.isEmpty ? "配置" : "修改") {
+                    Button("登录更新") { model.beginPlatformLogin() }
+                        .buttonStyle(.link)
+                        .controlSize(.small)
+                    Button("手动粘贴") {
                         draftPlatformToken = model.settings.platformToken
                         showingPlatformTokenField = true
                     }
