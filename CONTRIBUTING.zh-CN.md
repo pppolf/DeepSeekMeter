@@ -73,7 +73,8 @@ Conventional Commits + 中文描述：
 2. 本地验证（debug + release 构建、run-tests.sh、build-app.sh）
 3. 向 `main` 提 PR，按 [PR 模板](.github/pull_request_template.md) 逐项填写勾选
 4. PR 触发 CI，**CI 全绿才可合入**（建议 squash 合并）
-5. 合入 main 的 push 同样会触发 CI
+5. 同仓库分支的 PR 还会触发「AI Review」（DeepSeek API，遵循 AGENTS.md 审查）：以 `github-actions[bot]` 身份提交 COMMENT 意见，仅供参考，**合并仍由维护者手动决定**；fork PR 因拿不到 secrets 自动跳过
+6. 合入 main 的 push 同样会触发 CI
 
 ## 项目边界
 

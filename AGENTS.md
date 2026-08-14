@@ -96,7 +96,8 @@ Foundation / AppKit / SwiftUI / WebKit
 2. 本地验证完整链（见第 2 节）
 3. 提 PR 到 `main`，按 .github/pull_request_template.md 逐项填写勾选
 4. PR 触发 CI，**CI 全绿才可合入**（建议 squash 合并）
-5. 合入 main 的 push 也会触发 CI 验证
+5. PR 还会触发「AI Review」workflow（.github/workflows/ai-review.yml）：基于本文件规范与边界用 DeepSeek API 自动审查并提交 COMMENT 意见（更新式，只删旧 review 不发重复）；**它是顾问不是把关者，合并仍由维护者手动决定**。fork PR 因拿不到 secrets 会自动跳过
+6. 合入 main 的 push 也会触发 CI 验证
 
 ## 7. 发布流程（维护者）
 
