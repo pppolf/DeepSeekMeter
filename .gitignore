@@ -2,3 +2,8 @@
 build/
 .DS_Store
 *.xcuserstate
+
+# Windows 版（windows/）构建产物
+windows/**/bin/
+windows/**/obj/
+windows/.vs/
