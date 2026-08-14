@@ -25,9 +25,9 @@
 
 ### 从 Release 下载（推荐）
 
-1. 在 [Releases 页面](https://github.com/pppolf/DeepSeekMeter/releases) 下载最新的 `DeepSeekMeter-<版本>-macOS.zip` 或 `.dmg`
-2. 解压后把 `DeepSeekMeter.app` 拖入 `/Applications`
-3. 首次启动：右键 App → **打开**（App 为 ad-hoc 签名，Gatekeeper 会询问一次）
+1. 在 [Releases 页面](https://github.com/pppolf/DeepSeekMeter/releases) 下载最新的 `DeepSeekMeter-<版本>-macOS.dmg`
+2. 打开 DMG，把 `DeepSeekMeter.app` **拖到 `Applications` 快捷方式上**
+3. 首次启动：右键 App → **打开**（App 为 ad-hoc 签名，Gatekeeper 会询问一次；或用 `xattr -dr com.apple.quarantine /Applications/DeepSeekMeter.app` 解除）
 
 ### 从源码构建
 

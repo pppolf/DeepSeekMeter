@@ -25,9 +25,9 @@ A lightweight **macOS menu bar app** that keeps an eye on your DeepSeek account:
 
 ### From Releases (recommended)
 
-1. Download the latest `DeepSeekMeter-<version>-macOS.zip` or `.dmg` from the [Releases page](https://github.com/pppolf/DeepSeekMeter/releases)
-2. Unzip and move `DeepSeekMeter.app` to `/Applications`
-3. First launch: right-click the app → **Open** (the app is ad-hoc signed, so Gatekeeper asks once)
+1. Download the latest `DeepSeekMeter-<version>-macOS.dmg` from the [Releases page](https://github.com/pppolf/DeepSeekMeter/releases)
+2. Open the DMG, **drag `DeepSeekMeter.app` onto the `Applications` shortcut**
+3. First launch: right-click the app → **Open** (the app is ad-hoc signed, so Gatekeeper asks once; alternatively `xattr -dr com.apple.quarantine /Applications/DeepSeekMeter.app`)
 
 ### Build from source
 
