@@ -47,7 +47,7 @@ public sealed class TrayIconController : IDisposable
 
     // MARK: - 悬浮窗
 
-    public void ShowPopover()
+    public void ShowPopover(System.Drawing.Point? anchor = null)
     {
         if (_disposed) return;
         if (_popover is null)
@@ -57,34 +57,27 @@ public sealed class TrayIconController : IDisposable
         }
         if (!_popover.IsVisible)
         {
-            PositionNearTray(_popover);
+            // 先 Show 完成布局（SizeToContent 此时才算得尺寸），再基于点击点定位
             _popover.Show();
+            _popover.PositionNear(anchor ?? System.Windows.Forms.Cursor.Position);
         }
+        // 短暂忽略 Deactivated，避免 Show + Activate 过程把刚显示的窗口立刻 Hide 掉
+        _popover.SuppressHideFor(TimeSpan.FromMilliseconds(350));
         _popover.Activate();
     }
 
-    private void TogglePopover()
+    private void TogglePopover(System.Drawing.Point anchor)
     {
         if (_popover is { IsVisible: true })
             _popover.Hide();
         else
-            ShowPopover();
-    }
-
-    /// <summary>把悬浮窗定位到托盘图标上方（对齐 NSPopover 依附菜单栏图标）。</summary>
-    private static void PositionNearTray(PopoverWindow window)
-    {
-        var area = System.Windows.SystemParameters.WorkArea;
-        var x = area.Right - window.Width - 12;
-        var y = area.Bottom - window.Height - 8;
-        window.Left = x;
-        window.Top = y;
+            ShowPopover(anchor);
     }
 
     private void OnMouseClick(object? sender, System.Windows.Forms.MouseEventArgs e)
     {
         if (e.Button == System.Windows.Forms.MouseButtons.Left)
-            TogglePopover();
+            TogglePopover(System.Windows.Forms.Cursor.Position);
     }
 
     // MARK: - 渲染

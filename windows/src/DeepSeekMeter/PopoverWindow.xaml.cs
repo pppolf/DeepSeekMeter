@@ -1,6 +1,6 @@
 using System.Windows;
+using System.Windows.Input;
 using System.Windows.Media;
-using System.Windows.Threading;
 using DeepSeekMeter.Core;
 
 namespace DeepSeekMeter;
@@ -13,6 +13,8 @@ public partial class PopoverWindow : Window
 {
     private readonly MainViewModel _model;
     private bool _suppressEvents;
+    private bool _pinned;
+    private DateTime _suppressHideUntil = DateTime.MinValue;
 
     /// <summary>模型用量行（UI 展示用）。</summary>
     private sealed record ModelRow(string Name, string Detail);
@@ -22,12 +24,123 @@ public partial class PopoverWindow : Window
 
     private TrendMetric _trend = TrendMetric.Output;
 
+    /// <summary>短暂忽略 Deactivated（Show + Activate 过程的失活不触发隐藏）。</summary>
+    public void SuppressHideFor(TimeSpan span) => _suppressHideUntil = DateTime.Now + span;
+
     public PopoverWindow(MainViewModel model)
     {
         InitializeComponent();
         _model = model;
         _model.PropertyChanged += (_, _) => Refresh();
+        _model.Settings.PropertyChanged += (_, _) => Refresh(); // 开机自启回滚等设置变化时同步 UI
+        Loaded += (_, _) =>
+        {
+            ApplyMaxHeight();
+            Refresh(); // 首次布局完成后填充内容
+        };
         Refresh();
+    }
+
+    // MARK: - 定位（基于托盘点击点）
+
+    /// <summary>把窗口定位到屏幕点击点附近（优先上方，clamp 到当前屏工作区；像素→DIP 转换）。</summary>
+    public void PositionNear(System.Drawing.Point screenPoint)
+    {
+        var screen = System.Windows.Forms.Screen.FromPoint(screenPoint);
+        var area = screen.WorkingArea; // 物理像素
+        var (sx, sy) = DpiScale();
+
+        double left = area.Left / sx, top = area.Top / sy;
+        double right = area.Right / sx, bottom = area.Bottom / sy;
+        double width = ActualWidth;
+        double height = double.IsNaN(ActualHeight) ? 400 : ActualHeight;
+        double cx = screenPoint.X / sx, cy = screenPoint.Y / sy;
+
+        const double margin = 8;
+        double x = cx - width / 2;
+        double y = cy - height - margin; // 优先显示在点击点上方
+        if (y < top + margin) y = cy + margin; // 上方放不下，改到下方
+
+        x = Math.Max(left + margin, Math.Min(x, right - width - margin));
+        y = Math.Max(top + margin, Math.Min(y, bottom - height - margin));
+
+        Left = x;
+        Top = y;
+    }
+
+    private (double scaleX, double scaleY) DpiScale()
+    {
+        if (PresentationSource.FromVisual(this) is { } source)
+        {
+            var m = source.CompositionTarget.TransformToDevice;
+            return (m.M11, m.M22);
+        }
+        return (1.0, 1.0);
+    }
+
+    // MARK: - 窗口可用性
+
+    /// <summary>内容最大高度受当前工作区限制（超出滚动）。</summary>
+    private void ApplyMaxHeight()
+    {
+        var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+        if (hwnd == IntPtr.Zero) return;
+        var screen = System.Windows.Forms.Screen.FromHandle(hwnd);
+        var (_, sy) = DpiScale();
+        var areaHeight = screen.WorkingArea.Height / sy;
+        ScrollRoot.MaxHeight = Math.Max(300, areaHeight - 100);
+    }
+
+    /// <summary>高度变化时保持窗口不出当前屏（向上收，避免底部超出）。</summary>
+    private void OnSizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        if (!IsVisible) return;
+        var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+        if (hwnd == IntPtr.Zero) return;
+        var screen = System.Windows.Forms.Screen.FromHandle(hwnd);
+        var area = screen.WorkingArea;
+        var (sx, sy) = DpiScale();
+        double left = area.Left / sx, top = area.Top / sy;
+        double right = area.Right / sx, bottom = area.Bottom / sy;
+        const double margin = 8;
+
+        if (Left < left + margin) Left = left + margin;
+        if (Top < top + margin) Top = top + margin;
+        if (Left + ActualWidth > right - margin) Left = right - ActualWidth - margin;
+        if (Top + ActualHeight > bottom - margin) Top = bottom - ActualHeight - margin;
+    }
+
+    /// <summary>无边框窗口：头部区域拖动。</summary>
+    private void OnHeaderMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (e.ButtonState != MouseButtonState.Pressed) return;
+        try { DragMove(); } catch (InvalidOperationException) { /* 已在拖动中，忽略 */ }
+    }
+
+    private void OnCloseClick(object sender, RoutedEventArgs e) => Hide();
+
+    private void OnPreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Escape)
+        {
+            Hide();
+            e.Handled = true;
+        }
+    }
+
+    // MARK: - 钉住
+
+    private void OnPinClick(object sender, RoutedEventArgs e)
+    {
+        SetPinned(!_pinned);
+    }
+
+    private void SetPinned(bool pinned)
+    {
+        _pinned = pinned;
+        PinButton.IsChecked = pinned;
+        PinButton.Opacity = pinned ? 1.0 : 0.45;
+        PinButton.ToolTip = pinned ? "已固定（点击外部不关闭）" : "固定窗口（点击外部不关闭）";
     }
 
     // MARK: - 刷新全部 UI
@@ -205,7 +318,17 @@ public partial class PopoverWindow : Window
             return;
         }
 
-        var todayKey = usage.AmountDays.Max(d => d.Date);
+        // 空 AmountDays（无用量 / 空 days / 新账号）：清空图表，不计算 Max
+        var todayKey = usage.LatestAmountDate;
+        if (todayKey is null)
+        {
+            TrendChart.Entries = [];
+            TrendTodayText.Text = "今日 —";
+            TrendPeakText.Text = "";
+            TrendEmptyText.Visibility = Visibility.Visible;
+            return;
+        }
+
         var entries = new List<SparklineControl.Entry>();
         foreach (var day in usage.AmountDays)
         {
@@ -331,6 +454,11 @@ public partial class PopoverWindow : Window
         UpdateTrend();
     }
 
-    /// <summary>点击外部自动关闭（对齐 NSPopover transient 行为）。</summary>
-    private void OnDeactivated(object? sender, EventArgs e) => Hide();
+    /// <summary>点击外部自动关闭（对齐 NSPopover transient 行为）；钉住时不关闭。</summary>
+    private void OnDeactivated(object? sender, EventArgs e)
+    {
+        if (_pinned) return; // 已固定：点击外部保持显示
+        if (DateTime.Now < _suppressHideUntil) return; // Show + Activate 阶段的临时失活不隐藏
+        Hide();
+    }
 }
