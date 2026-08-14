@@ -29,6 +29,17 @@
 2. 打开 DMG，把 `DeepSeekMeter.app` **拖到 `Applications` 快捷方式上**
 3. 首次启动：右键 App → **打开**（App 为 ad-hoc 签名，Gatekeeper 会询问一次；或用 `xattr -dr com.apple.quarantine /Applications/DeepSeekMeter.app` 解除）
 
+> **为什么提示「Apple 无法验证」？** 因为 App 目前是免费的 ad-hoc 签名（没有付费 Apple 开发者账号），下载副本会被 Gatekeeper 拦截。彻底消除需要**付费的 Apple Developer Program**：用你的 **Developer ID 证书**签名并公证：
+
+> ```bash
+> APPLE_ID=you@example.com \
+> APP_PASSWORD=xxxx-xxxx-xxxx-xxxx \
+> TEAM_ID=ABCDE12345 \
+> ./Scripts/notarize.sh build/DeepSeekMeter.app
+> ```
+>
+> （APP_PASSWORD 是 appleid.apple.com 生成的「App 专用密码」；build-app.sh 检测到开发者证书时会自动改用 Developer ID 签名。）
+
 ### 从源码构建
 
 ```bash
