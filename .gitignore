@@ -7,6 +7,7 @@ build/
 windows/**/bin/
 windows/**/obj/
 windows/.vs/
+windows/publish/
 
-# VSCode ±¾µØÅäÖÃ£¨²»Èë¿â£©
+# VSCode æœ¬åœ°é…ç½®ï¼ˆä¸å…¥åº“ï¼‰
 .vscode/
