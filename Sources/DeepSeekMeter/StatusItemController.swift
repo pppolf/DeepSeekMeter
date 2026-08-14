@@ -109,12 +109,21 @@ final class StatusItemController: NSObject {
     }
 
     private static func titleColor(for model: AppModel?) -> NSColor {
-        if let balance = model?.lastBalance {
-            if balance.total < 1 { return .systemRed }
-            if balance.total < 10 { return .systemOrange }
+        guard let model else { return .labelColor }
+        switch model.status {
+        case .fresh:
+            if let balance = model.lastBalance {
+                if balance.total < 1 { return .systemRed }
+                if balance.total < 10 { return .systemOrange }
+            }
+            return .labelColor
+        case .stale:
+            return .systemOrange
+        case .error, .tokenExpired:
+            return .systemRed
+        default:
             return .labelColor
         }
-        return model?.lastError != nil ? .systemRed : .labelColor
     }
 
     private static func icon(for model: AppModel?) -> NSImage? {
@@ -125,8 +134,25 @@ final class StatusItemController: NSObject {
     }
 
     private static func tooltip(for model: AppModel?) -> String {
-        guard let lastUpdate = model?.lastUpdate else {
-            return model?.lastError ?? "DeepSeek Meter"
+        guard let model else { return "DeepSeek Meter" }
+        switch model.status {
+        case .tokenExpired:
+            return "登录已过期，点击重新登录"
+        case .error:
+            return model.lastError ?? "获取失败"
+        case .stale:
+            var stale = model.lastError ?? "数据可能已过期"
+            if let lastUpdate = model.lastUpdate {
+                let formatter = DateFormatter()
+                formatter.dateFormat = "HH:mm:ss"
+                stale += " · 最后成功 \(formatter.string(from: lastUpdate))"
+            }
+            return stale
+        default:
+            break
+        }
+        guard let lastUpdate = model.lastUpdate else {
+            return model.lastError ?? "DeepSeek Meter"
         }
         let formatter = DateFormatter()
         formatter.dateFormat = "HH:mm:ss"

@@ -62,15 +62,23 @@ struct PopoverView: View {
     }
 
     private var statusColor: Color {
-        if model.lastBalance != nil { return .green }
-        if model.lastError != nil { return .red }
-        return .gray
+        switch model.status {
+        case .fresh: return .green
+        case .stale: return .orange
+        case .error, .tokenExpired: return .red
+        default: return .gray
+        }
     }
 
     private var statusText: String {
-        if model.lastBalance != nil { return "可用" }
-        if model.lastError != nil { return "异常" }
-        return "未获取"
+        switch model.status {
+        case .fresh: return "可用"
+        case .stale: return "数据可能过期"
+        case .error: return "异常"
+        case .tokenExpired: return "已过期"
+        case .loading: return "加载中"
+        case .notLoggedIn: return "未登录"
+        }
     }
 
     // MARK: - 余额
@@ -120,18 +128,22 @@ struct PopoverView: View {
 
     private var usageSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            if let usage = model.monthUsage {
+            if model.platformTokenExpired {
+                // Token 过期最优先：不能被已有 monthUsage 遮住
+                expiredOrErrorPrompt
+            } else if let usage = model.monthUsage {
+                let symbol = currencySymbol(model.currency)
                 HStack(spacing: 6) {
                     Text("\(usage.year)年\(usage.month)月用量")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     Spacer()
-                    Text("累计 ¥\(format(usage.totalCost))")
+                    Text("累计 \(symbol)\(format(usage.totalCost))")
                         .font(.caption.weight(.semibold))
                         .monospacedDigit()
                 }
                 HStack(spacing: 10) {
-                    statCell(title: "今日费用", value: "¥\(format(usage.cost(on: Date())))")
+                    statCell(title: "今日费用", value: "\(symbol)\(format(usage.cost(on: Date())))")
                     let today = usage.tokens(on: Date())
                     statCell(title: "今日请求", value: Self.countString(today.requests))
                     statCell(title: "今日输出", value: Self.tokenString(today.response))
@@ -149,12 +161,12 @@ struct PopoverView: View {
                         Spacer()
                         let cost = usage.costModels.first(where: { $0.model == item.model })?
                             .usage.reduce(0) { $0 + $1.value } ?? 0
-                        Text("\(Self.countString(item.requests)) 次 · ¥\(format(cost))")
+                        Text("\(Self.countString(item.requests)) 次 · \(symbol)\(format(cost))")
                             .font(.caption.monospacedDigit())
                             .foregroundStyle(.secondary)
                     }
                 }
-            } else if model.platformTokenExpired || model.usageError != nil {
+            } else if model.usageError != nil {
                 expiredOrErrorPrompt
             } else if model.isFetching {
                 HStack(spacing: 6) {

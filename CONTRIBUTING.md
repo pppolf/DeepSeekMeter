@@ -40,10 +40,16 @@ Sources/DeepSeekMeter/           App sources (SwiftUI + AppKit)
   PlatformService.swift          DeepSeek platform API client
   Models.swift                   Decodable models + aggregation
   SettingsStore.swift            UserDefaults persistence + launch-at-login
+windows/                         Windows version (.NET 8 + WPF, feature-aligned with the macOS app)
+  src/DeepSeekMeter.Core/        Pure-logic library (Models / Formatting / PlatformService / SettingsStore)
+  src/DeepSeekMeter/             WPF app (MainViewModel / TrayIconController / PopoverWindow / LoginWindow)
+  tests/DeepSeekMeter.Selftest/  Lightweight self-tests (console, no test framework)
 Scripts/                         Info.plist / build / install / notarize / icon / tests
   selftest/                      Lightweight unit tests (swiftc, no Xcode)
-.github/workflows/               ci.yml (push/PR) + release.yml (v* tags)
+.github/workflows/               ci.yml (push/PR: macOS + Windows) + release.yml (v* tags)
 ```
+
+> **Windows version**: the `.NET 8 + WPF` implementation lives in `windows/` and mirrors the macOS app's features and platform API contract (see [windows/README.md](windows/README.md)). WPF/WinForms are .NET platform components; `Microsoft.Web.WebView2` (official Microsoft package, runtime preinstalled on Windows 10 1809+/11) is the one deliberate exception to the zero-dependency rule, needed to embed the official login page. Keep the Swift side dependency-free.
 
 ## Code Conventions
 

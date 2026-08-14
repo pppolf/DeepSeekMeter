@@ -97,6 +97,73 @@ do {
 check(format(311932800.0) == "311932800.0", "大数格式化")
 check(PopoverViewHelpersCountString(1130) == "1,130", "千分位")
 
+// 6. biz_code != 0 解码（业务错误识别）
+let bizErrJSON = """
+{"code":0,"msg":"","data":{"biz_code":10001,"biz_msg":"业务错误","biz_data":null}}
+"""
+do {
+    struct BizErrBiz: Decodable { let bizCode: Int; let bizMsg: String; let bizData: UsageData? }
+    struct BizErrResp: Decodable { let code: Int; let data: BizErrBiz? }
+    let decoder = JSONDecoder()
+    decoder.keyDecodingStrategy = .convertFromSnakeCase
+    let resp = try decoder.decode(BizErrResp.self, from: Data(bizErrJSON.utf8))
+    check(resp.data?.bizCode == 10001, "biz_code 非 0 正确解码")
+} catch {
+    check(false, "biz_code 解码抛错：\(error)")
+}
+
+// 7. 空 data / 空 biz_data
+let emptyDataJSON = """
+{"code":0,"msg":"","data":null}
+"""
+do {
+    struct EmptyBiz: Decodable { let bizData: UsageData? }
+    struct EmptyResp: Decodable { let code: Int; let data: EmptyBiz? }
+    let decoder = JSONDecoder()
+    decoder.keyDecodingStrategy = .convertFromSnakeCase
+    let resp = try decoder.decode(EmptyResp.self, from: Data(emptyDataJSON.utf8))
+    check(resp.data == nil, "空 data 解码为 nil")
+} catch {
+    check(false, "空 data 解码抛错：\(error)")
+}
+
+let emptyBizDataJSON = """
+{"code":0,"msg":"","data":{"biz_code":0,"biz_msg":"","biz_data":null}}
+"""
+do {
+    struct EmptyBiz2: Decodable { let bizData: UsageData? }
+    struct EmptyResp2: Decodable { let code: Int; let data: EmptyBiz2? }
+    let decoder = JSONDecoder()
+    decoder.keyDecodingStrategy = .convertFromSnakeCase
+    let resp = try decoder.decode(EmptyResp2.self, from: Data(emptyBizDataJSON.utf8))
+    check(resp.data != nil && resp.data?.bizData == nil, "空 biz_data 解码为 nil")
+} catch {
+    check(false, "空 biz_data 解码抛错：\(error)")
+}
+
+// 8. 数据可信度状态判定
+check(dataStatus(token: "", tokenExpired: false, hasData: false, hasError: false) == .notLoggedIn, "空 token 未登录")
+check(dataStatus(token: "tok", tokenExpired: true, hasData: true, hasError: false) == .tokenExpired, "登录过期优先于旧数据")
+check(dataStatus(token: "tok", tokenExpired: false, hasData: true, hasError: true) == .stale, "有数据有错误为 stale")
+check(dataStatus(token: "tok", tokenExpired: false, hasData: true, hasError: false) == .fresh, "有数据无错误为 fresh")
+check(dataStatus(token: "tok", tokenExpired: false, hasData: false, hasError: true) == .error, "无数据有错误为 error")
+check(dataStatus(token: "tok", tokenExpired: false, hasData: false, hasError: false) == .loading, "已登录无数据为 loading")
+
+// 9. 空钱包（UserSummary normal_wallets 为空）
+let emptyWalletJSON = """
+{"code":0,"msg":"","data":{"biz_code":0,"biz_msg":"","biz_data":{"normal_wallets":[],"bonus_wallets":[],"total_costs":[]}}}
+"""
+do {
+    struct SummaryBiz2: Decodable { let bizData: UserSummary }
+    struct SummaryResp2: Decodable { let code: Int; let data: SummaryBiz2? }
+    let decoder = JSONDecoder()
+    decoder.keyDecodingStrategy = .convertFromSnakeCase
+    let resp = try decoder.decode(SummaryResp2.self, from: Data(emptyWalletJSON.utf8))
+    check(resp.data?.bizData.normalWallets.isEmpty == true, "空钱包正确解码")
+} catch {
+    check(false, "空钱包解码抛错：\(error)")
+}
+
 if failures > 0 {
     print("\n❌ \(failures) 项未通过")
     exit(1)

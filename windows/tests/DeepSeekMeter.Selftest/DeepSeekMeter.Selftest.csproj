@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>DeepSeekMeter.Selftest</RootNamespace>
+    <!-- 轻量自测（对齐 Scripts/selftest/main.swift）：不引入 xUnit 等测试框架 -->
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\DeepSeekMeter.Core\DeepSeekMeter.Core.csproj" />
+  </ItemGroup>
+
+</Project>

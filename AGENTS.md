@@ -46,12 +46,17 @@ Sources/DeepSeekMeter/
   Views/
     PopoverView.swift            悬浮窗主界面（SwiftUI）
     SparklineView.swift          Token 按天用量柱状图
+windows/                         Windows 版（.NET 8 + WPF，与 macOS 版功能对齐）
+  src/DeepSeekMeter.Core/        纯逻辑库：Models / Formatting / PlatformService / SettingsStore
+  src/DeepSeekMeter/             WPF 应用：MainViewModel / TrayIconController / PopoverWindow / LoginWindow 等
+  tests/DeepSeekMeter.Selftest/  轻量自测（控制台，零测试框架）
+  README.md                      Windows 版说明（含与 macOS 版对应关系）
 Scripts/
   build-app.sh / install.sh / notarize.sh / run-tests.sh / make-icon.sh / generate-icon.swift
   Info.plist                     应用包信息（**版本号在这里改**）
   selftest/main.swift            轻量自测源码（swiftc 编译运行）
 .github/workflows/
-  ci.yml                         push main / PR：构建 + 自测 + 打包 + 冒烟
+  ci.yml                         push main / PR：macOS（构建+自测+打包+冒烟）+ Windows（构建+自测+冒烟）
   release.yml                    打 v* 标签：构建 DMG 并发布 GitHub Release
 ```
 

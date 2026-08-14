@@ -1,16 +1,14 @@
 name: Release
 
-# 推送 v* 标签（如 v0.1.0）时自动构建并发布 GitHub Release
+# 推送 v* 标签（如 v0.1.0）时自动构建并发布 GitHub Release（macOS DMG + Windows ZIP）
 on:
   push:
     tags: ["v*"]
 
 jobs:
-  release:
-    name: Build & Publish
+  build-macos:
+    name: Build macOS
     runs-on: macos-15
-    permissions:
-      contents: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -31,9 +29,69 @@ jobs:
           ln -s /Applications "$STAGE/Applications"
           hdiutil create -volname "DeepSeekMeter" -srcfolder "$STAGE" -ov -format UDZO "build/DeepSeekMeter-${VERSION}-macOS.dmg"
 
+      - name: Upload macOS artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: macOS-dmg
+          path: build/DeepSeekMeter-*-macOS.dmg
+
+  build-windows:
+    name: Build Windows
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Publish self-contained x64
+        shell: pwsh
+        run: |
+          dotnet publish windows/src/DeepSeekMeter/DeepSeekMeter.csproj `
+            -c Release -r win-x64 --self-contained true `
+            -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true `
+            -o windows/publish/win-x64
+
+      - name: Package ZIP
+        shell: pwsh
+        run: |
+          $stage = "windows/publish/DeepSeekMeter-win-x64"
+          if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
+          New-Item -ItemType Directory -Path $stage | Out-Null
+          Copy-Item -Path "windows/publish/win-x64/*" -Destination $stage -Recurse
+          Compress-Archive -Path $stage -DestinationPath "windows/publish/DeepSeekMeter-win-x64.zip"
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-zip
+          path: windows/publish/DeepSeekMeter-win-x64.zip
+
+  release:
+    name: Publish Release
+    needs: [build-macos, build-windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download macOS artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: macOS-dmg
+          path: artifacts
+
+      - name: Download Windows artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-zip
+          path: artifacts
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            build/DeepSeekMeter-*-macOS.dmg
+            artifacts/*
           generate_release_notes: true

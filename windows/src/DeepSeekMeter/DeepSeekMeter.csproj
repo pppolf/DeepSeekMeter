@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <UseWPF>true</UseWPF>
+    <!-- 托盘图标使用 .NET 平台自带组件 System.Windows.Forms.NotifyIcon（非第三方包） -->
+    <UseWindowsForms>true</UseWindowsForms>
+    <RootNamespace>DeepSeekMeter</RootNamespace>
+    <AssemblyName>DeepSeekMeter</AssemblyName>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>app.ico</ApplicationIcon>
+    <Version>0.1.0</Version>
+    <AssemblyVersion>0.1.0.0</AssemblyVersion>
+    <FileVersion>0.1.0.0</FileVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\DeepSeekMeter.Core\DeepSeekMeter.Core.csproj" />
+    <!--
+      WebView2：微软官方 Web 控件（Edge Chromium）。
+      Windows 11 / Win10 1809+ 均预装 WebView2 Runtime，包仅是托管互操作层；
+      是 Windows 侧实现「一键登录」（对齐 macOS WKWebView）所需的唯一官方组件依赖，
+      已在 PR 描述中说明理由（仓库红线针对 Swift 侧零第三方依赖）。
+    -->
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.2592.51" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- 移除 UseWindowsForms 隐式注入的命名空间，避免与 WPF 类型（Color/Brushes/Point/Application）冲突 -->
+    <Using Remove="System.Drawing" />
+    <Using Remove="System.Windows.Forms" />
+  </ItemGroup>
+
+</Project>

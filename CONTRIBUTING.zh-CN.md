@@ -40,14 +40,18 @@ Sources/DeepSeekMeter/           App 源码（SwiftUI + AppKit）
   PlatformService.swift          平台接口客户端
   Models.swift                   Decodable 模型 + 聚合
   SettingsStore.swift            UserDefaults 持久化 + 开机自启
+windows/                         Windows 版（.NET 8 + WPF，功能与 macOS 版对齐）
+  src/DeepSeekMeter.Core/        纯逻辑库（Models / Formatting / PlatformService / SettingsStore）
+  src/DeepSeekMeter/             WPF 应用（MainViewModel / TrayIconController / PopoverWindow / LoginWindow）
+  tests/DeepSeekMeter.Selftest/  轻量自测（控制台，零测试框架）
 Scripts/                         构建 / 安装 / 公证 / 图标 / 自测脚本
   selftest/                      轻量单元测试（swiftc，无需 Xcode）
-.github/workflows/               ci.yml（push/PR）+ release.yml（v* 标签）
+.github/workflows/               ci.yml（push/PR：macOS + Windows）+ release.yml（v* 标签）
 ```
 
 ## 代码规范
 
-- **单 target、零第三方依赖**——刻意设计；新增依赖请先开 Issue 讨论
+- **单 target、零第三方依赖**——刻意设计；新增依赖请先开 Issue 讨论。例外：`windows/` 的 Windows 版（.NET 8 + WPF）使用微软官方 `Microsoft.Web.WebView2` 包实现内嵌登录页（运行时随 Win10 1809+/11 预装），是 Windows 侧刻意允许的唯一 NuGet 依赖；Swift 侧保持零依赖不变
 - Swift 6 工具链，**Swift 5 语言模式**（Package.swift 中显式设置）
 - 分层：UI（Views/StatusItemController）→ AppModel/SettingsStore（状态）→ PlatformService（网络）→ Foundation。UI 不直接发网络请求；所有请求经 `PlatformService`，错误统一转 `PlatformError`（用户可读中文 message）
 - 响应模型：Models.swift 中的 `Decodable` struct，沿用平台包裹结构 `{code, msg, data: {biz_code, biz_msg, biz_data}}`（注意 `biz_data` 有时是对象、有时是数组，以真实响应为准）
