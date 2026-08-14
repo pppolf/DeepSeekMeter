@@ -126,7 +126,10 @@ jobs:
                 try {
                   await github.rest.pulls.deleteReview({ ...repo, pull_number: pr, review_id: r.id });
                   console.log('已删除旧 review #' + r.id);
-                } catch (e) { console.log('删除旧 review 失败（忽略）：' + e.message); }
+                } catch (e) {
+                  // 已提交的 review 可能无法删除（GitHub 限制），只记录不阻断
+                  console.error('删除旧 review #' + r.id + ' 失败：' + e.message);
+                }
               }
             }
             await github.rest.pulls.createReview({

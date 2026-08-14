@@ -149,7 +149,7 @@ struct PopoverView: View {
                     statCell(title: "今日输出", value: Self.tokenString(today.response))
                 }
                 if usage.cost(on: Date()) == 0 && usage.totalCost > 0 {
-                    Text("当日费用统计可能延迟数小时，余额为实时扣减")
+                    Text("当日费用统计可能延迟数小时甚至次日，余额为实时扣减")
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
                 }
