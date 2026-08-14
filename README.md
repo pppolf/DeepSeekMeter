@@ -1,90 +1,79 @@
-# DeepSeek Meter 🐳
+# DeepSeekMeter 🐳
 
-一个常驻 macOS 菜单栏的小工具：**实时查看 DeepSeek 余额 / 额度情况**，点击菜单栏图标即弹出悬浮窗。
+[![Release](https://img.shields.io/github/v/release/pppolf/DeepSeekMeter)](https://github.com/pppolf/DeepSeekMeter/releases)
+[![License](https://img.shields.io/github/license/pppolf/DeepSeekMeter)](LICENSE)
+![macOS](https://img.shields.io/badge/macOS-14%2B-blue)
+[中文版](README.zh-CN.md)
 
-## 功能
+A lightweight **macOS menu bar app** that keeps an eye on your DeepSeek account: balance, spending and token usage at a glance. Click the menu bar icon to open a popover with real-time stats.
 
-- 🖥️ **菜单栏常驻**：状态栏直接显示当前余额（如 `¥110.00`），余额过低变橙色、不足 1 元变红色
-- 🔑 **一键登录获取**：内嵌官方登录页，登录后自动获取并保存 Token；过期后点「重新登录」即可
-- 🪟 **点击弹悬浮窗**：余额卡片（总余额 / 赠送 / 充值）、币种、账户可用状态
-- 📊 **Token 用量明细**：本月/今日费用、请求数、输出 Token、缓存命中，按模型拆分
-- 📈 **Token 用量趋势**：本月按天的 Token 用量柱状图（输出 / 缓存命中 / 总量可切换）
-- 📈 **使用趋势**：近 24 小时余额折线图 + 「1小时 / 今日 / 24小时」消耗统计
-- ⏱️ **定时刷新**：15 秒 ~ 10 分钟可选，启动即拉取
-- 🔐 **Key 安全存储**：API Key 存入 macOS 钥匙串，不落明文
-- 🚀 **开机自启**：一键开关（需安装到 /Applications）
+## ✨ Features
 
-## 环境要求
+- 🖥️ **Menu bar balance**: shows your current balance right in the menu bar; turns orange below 10, red below 1
+- 🔑 **One-click login**: embedded official sign-in page — log in once, the app captures and stores your session token automatically (no developer tools needed)
+- 📊 **Usage details**: monthly / today's cost, request count, output tokens, cache-hit tokens, per-model breakdown
+- 📈 **Token usage trend**: daily token usage chart for the current month (output / cache-hit / total, switchable)
+- ⏱️ **Auto refresh**: 15s – 10min intervals
+- 🚀 **Launch at login**
 
-- macOS 14+（Apple Silicon / Intel 均可）
-- Xcode Command Line Tools（`xcode-select --install`）
+## 📋 Requirements
 
-## 快速开始
+- macOS 14+ (Apple Silicon or Intel)
+- Xcode Command Line Tools (`xcode-select --install`) — only needed to build from source
 
-### 1. 获取 DeepSeek API Key
+## ⬇️ Install
 
-打开 [platform.deepseek.com](https://platform.deepseek.com) → 左侧「API Keys」→ 创建新 Key（以 `sk-` 开头）。
+### From Releases (recommended)
 
-### 2. 构建并运行
+1. Download the latest `DeepSeekMeter-<version>-macOS.zip` or `.dmg` from the [Releases page](https://github.com/pppolf/DeepSeekMeter/releases)
+2. Unzip and move `DeepSeekMeter.app` to `/Applications`
+3. First launch: right-click the app → **Open** (the app is ad-hoc signed, so Gatekeeper asks once)
 
-```bash
-# 方式一：开发模式（直接从源码跑，不需要 .app）
-swift run
-
-# 方式二：构建 .app 并打开
-./Scripts/build-app.sh
-open build/DeepSeekMeter.app
-
-# 方式三：构建 + 安装到 /Applications + 启动（推荐，支持开机自启）
-./Scripts/install.sh
-```
-
-### 3. 一键登录（唯一凭证）
-
-首次启动会自动弹出悬浮窗 → 点「**一键登录**」：
-
-1. 弹出内嵌的官方登录页（[platform.deepseek.com](https://platform.deepseek.com)），正常登录即可（支持扫码/密码）
-2. 登录成功后 App **自动提取并校验 Token**，存入钥匙串，立即显示余额与本月用量
-
-> Token 是浏览器登录态，过期后悬浮窗会提示「平台登录已过期」并显示「重新登录」按钮，一键重新登录即可，全程无需开发者工具。
-
-## 使用说明
-
-- 点击菜单栏图标 ⇄ 打开 / 关闭悬浮窗；点击窗口外任意处自动关闭
-- 「刷新间隔」切换后立即生效
-- 菜单栏文字含义：正常=黑色，余额 < 10 = 橙色，余额 < 1 = 红色，获取失败 = 红色「—」
-- 数据说明：余额与用量均来自平台登录态接口（`get_user_summary` / `usage/amount` / `usage/cost`），与控制台可能有数分钟延迟
-
-## 目录结构
-
-```
-Sources/DeepSeekMeterCore/   核心逻辑：模型 / 网络请求 / 钥匙串 / 设置 / 趋势
-Sources/DeepSeekMeter/       应用层：入口 / 菜单栏状态项 / 悬浮窗 UI
-Scripts/                     Info.plist / 构建 / 安装 / 图标生成 / 自测
-Scripts/selftest/             轻量自测（JSON 解码、格式化，无 XCTest 依赖）
-```
-
-## 自测
-
-无需 Xcode 即可运行单元级验证（JSON 解码 / 格式化）：
+### Build from source
 
 ```bash
-./Scripts/run-tests.sh
+swift run                       # run in dev mode
+./Scripts/build-app.sh          # build build/DeepSeekMeter.app
+./Scripts/install.sh            # build, install to /Applications and launch
 ```
 
-## 常见问题
+## 🚀 Quick Start
 
-**菜单栏没图标？** 首次启动可能没有立即出现，检查：`活动监视器` 里是否已有 `DeepSeekMeter` 进程；或重新 `./Scripts/install.sh`。
+1. Launch the app — the 🐳 icon appears in the menu bar
+2. Click the icon → click **Log in**
+3. Sign in to the embedded official page ([platform.deepseek.com](https://platform.deepseek.com)) — password or QR code
+4. Done. The popover now shows your balance and this month's usage
 
-**提示「平台登录已过期」？** Token 是登录态，过期后点「重新登录」重新走一次登录流程即可；也支持在设置里「退出登录」后重新登录。
+> The session token is stored locally in the app's preferences; when it expires the app shows **Log in again** — one click re-authenticates.
 
-**开机自启不生效？** 开机自启依赖「安装到 /Applications」后的登录项注册，请使用 `./Scripts/install.sh` 安装，并在「系统设置 → 通用 → 登录项」确认。
+## 🔒 Privacy & Data
 
-**如何退出？** 点击菜单栏图标 → 悬浮窗右下角「退出」；或右键 Dock（无 Dock 图标时用活动监视器结束进程）。
+- All data comes from DeepSeek's own platform endpoints (`get_user_summary`, `usage/amount`, `usage/cost`) using **your own login token** — nothing is sent anywhere else
+- The token is stored only in `~/Library/Preferences/com.deepseek.meter.plist` on your machine; use **Sign out** in the popover to remove it
+- Token usage data may lag the dashboard by a few minutes
 
-## 卸载
+## 🛠 Development
+
+```
+Sources/DeepSeekMeter/           App sources (SwiftUI + AppKit)
+  Views/                         Popover UI
+  LoginWindowController.swift    Embedded login page + token capture
+  PlatformService.swift          Platform API client
+Scripts/                         Info.plist / build / install / icon / tests
+Scripts/selftest/                Lightweight unit tests (no Xcode needed)
+```
 
 ```bash
-rm -rf /Applications/DeepSeekMeter.app
-# 如需删除钥匙串中的 Key：打开「钥匙串访问」搜索 deepseek.meter 删除
+./Scripts/run-tests.sh           # run self-tests
 ```
+
+## ❓ FAQ
+
+- **Token expired?** Click **Log in again** in the popover — one click re-login.
+- **Menu bar icon missing?** Check Activity Monitor for a `DeepSeekMeter` process, or re-run `./Scripts/install.sh`.
+- **How to quit?** Menu bar icon → **Quit** in the popover.
+- **How to uninstall?** Remove `/Applications/DeepSeekMeter.app` and `~/Library/Preferences/com.deepseek.meter.plist`.
+
+## 📄 License
+
+[MIT](LICENSE) © 2026 pppolf
