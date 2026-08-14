@@ -1,0 +1,137 @@
+name: AI Review
+
+# PR 自动 AI 审查（DeepSeek API）
+# - 只对「同仓库分支」的 PR 生效（fork PR 拿不到 secrets，自动跳过）
+# - 审查标准：仓库根目录 AGENTS.md（规范与边界红线）
+# - 只提交 COMMENT 意见，不自动合并 —— 合并由维护者手动决定
+
+on:
+  pull_request:
+    types: [opened, synchronize, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: ai-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  ai-review:
+    name: AI 代码审查（DeepSeek）
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    env:
+      DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+      PR_TITLE: ${{ github.event.pull_request.title }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - name: 生成 diff
+        run: |
+          BASE="${{ github.event.pull_request.base.sha }}"
+          if ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then
+            git fetch origin "$BASE" --depth=1 2>/dev/null || true
+          fi
+          git diff "$BASE"...HEAD -- . > /tmp/pr.diff
+          echo "diff 行数：$(wc -l < /tmp/pr.diff)"
+
+      - name: 构造请求并调用 DeepSeek API
+        id: api
+        if: env.DEEPSEEK_API_KEY != ''
+        run: |
+          python3 - <<'PY'
+          import json, os
+
+          diff = open('/tmp/pr.diff', encoding='utf-8', errors='replace').read()
+          agents = open('AGENTS.md', encoding='utf-8', errors='replace').read()
+
+          MAX_DIFF = 60000  # 字符数上限，超长截断
+          if len(diff) > MAX_DIFF:
+              diff = diff[:MAX_DIFF] + "\n……（diff 过大已截断，建议分批提交）"
+
+          SYSTEM = """你是 DeepSeekMeter（macOS 菜单栏应用，SwiftUI + AppKit）仓库的资深代码审查员。
+          你的任务：审查 pull request 的 diff，给出专业、具体、可执行的审查意见。
+
+          必须严格遵守仓库根目录 AGENTS.md 中的规范，特别是第 8 节「边界（红线）」：
+          任何触碰红线的改动（引入第三方依赖、改动 Token 存储方式、臆造平台接口、
+          夹带真实凭据、破坏 CI、提交构建产物等）必须作为最高优先级问题指出。
+
+          输出要求（全部用中文）：
+          ## 一句话总结
+          ## 🔴 红线 / 严重问题
+          ## 🟡 建议改进
+          ## 🔵 小问题 / 风格
+          ## 审查结论
+          - 每项问题给出「文件:行号 + 具体修改建议」；没有问题的类别直接省略
+          - 不要为了凑数而挑刺；不确定的事情不要妄下结论；不要空泛表扬
+          - 你是顾问不是把关者：给出意见，最终由维护者手动决定是否合并"""
+
+          user = f"""## 仓库规范（AGENTS.md 全文）
+          {agents}
+
+          ## PR 标题
+          {os.environ.get('PR_TITLE', '')}
+
+          ## 变更 diff
+          {diff}"""
+
+          payload = {
+              "model": os.environ.get("AI_MODEL", "deepseek-chat"),
+              "messages": [
+                  {"role": "system", "content": SYSTEM},
+                  {"role": "user", "content": user},
+              ],
+              "temperature": 0.3,
+              "max_tokens": 4096,
+              "stream": False,
+          }
+          open('/tmp/payload.json', 'w', encoding='utf-8').write(
+              json.dumps(payload, ensure_ascii=False))
+          PY
+
+          HTTP=$(curl -s -o /tmp/response.json -w '%{http_code}' \
+            https://api.deepseek.com/chat/completions \
+            -H "Authorization: Bearer $DEEPSEEK_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d @/tmp/payload.json)
+          echo "DeepSeek API HTTP $HTTP"
+          if [ "$HTTP" != "200" ]; then
+            echo "调用失败：" && head -c 500 /tmp/response.json
+            exit 1
+          fi
+          jq -r '.choices[0].message.content' /tmp/response.json > /tmp/review-body.md
+          echo "review 长度：$(wc -c < /tmp/review-body.md)"
+
+      - name: 提交 review 到 PR
+        if: steps.api.outcome == 'success'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const body = fs.readFileSync('/tmp/review-body.md', 'utf8');
+            if (!body.trim()) { console.log('review 内容为空，跳过'); return; }
+            const pr = context.payload.pull_request.number;
+            const repo = { owner: context.repo.owner, repo: context.repo.repo };
+            // 更新式 review：先删掉本 bot 上一次的 review，避免刷屏
+            const { data: reviews } = await github.rest.pulls.listReviews({ ...repo, pull_number: pr });
+            for (const r of reviews) {
+              if (r.user && r.user.login === 'github-actions[bot]') {
+                try {
+                  await github.rest.pulls.deleteReview({ ...repo, pull_number: pr, review_id: r.id });
+                  console.log('已删除旧 review #' + r.id);
+                } catch (e) { console.log('删除旧 review 失败（忽略）：' + e.message); }
+              }
+            }
+            await github.rest.pulls.createReview({
+              ...repo, pull_number: pr,
+              event: 'COMMENT',
+              body: body,
+            });
+            console.log('review 已提交到 PR #' + pr);

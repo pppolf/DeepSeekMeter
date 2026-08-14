@@ -79,7 +79,8 @@ Conventional Commits with a Chinese description:
 2. Verify locally (build debug + release, run-tests.sh, build-app.sh)
 3. Open a PR to `main` and fill in the [PR template](.github/pull_request_template.md) — every checkbox matters
 4. PR triggers CI; **merge only when CI is green** (squash merge recommended)
-5. Pushes to `main` also run CI
+5. Same-repo PRs also get an automatic **AI review** (DeepSeek API, follows AGENTS.md) — it comments as `github-actions[bot]`, advisory only; the maintainer merges manually
+6. Pushes to `main` also run CI
 
 ## Scope & Boundaries
 
