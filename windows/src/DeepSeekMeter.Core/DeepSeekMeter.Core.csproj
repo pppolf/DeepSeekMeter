@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>DeepSeekMeter.Core</RootNamespace>
+    <AssemblyName>DeepSeekMeter.Core</AssemblyName>
+    <!-- 与仓库"零第三方依赖"红线对齐：Core 不引用任何 NuGet 包 -->
+  </PropertyGroup>
+
+</Project>

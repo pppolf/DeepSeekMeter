@@ -1,0 +1,9 @@
+<Application x:Class="DeepSeekMeter.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Application.Resources>
+        <!-- 主题色（DeepSeek 蓝），供柱状图等使用 -->
+        <Color x:Key="AccentColor">#4D6BFE</Color>
+        <SolidColorBrush x:Key="AccentBrush" Color="#4D6BFE" />
+    </Application.Resources>
+</Application>
