@@ -46,3 +46,41 @@ jobs:
         with:
           name: DeepSeekMeter.app
           path: build/DeepSeekMeter.app
+
+  windows-build:
+    name: Build & Test (Windows)
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Build (Release)
+        run: dotnet build windows/DeepSeekMeter.sln -c Release
+
+      - name: Run self-tests
+        run: dotnet run --project windows/tests/DeepSeekMeter.Selftest -c Release
+
+      - name: Smoke check (launch 6s)
+        shell: pwsh
+        run: |
+          $exe = "windows/src/DeepSeekMeter/bin/Release/net8.0-windows/DeepSeekMeter.exe"
+          $p = Start-Process -FilePath $exe -PassThru
+          Start-Sleep -Seconds 6
+          if (-not $p.HasExited) {
+            Write-Host "进程存活 ✓"
+            Stop-Process -Id $p.Id -Force
+          } else {
+            Write-Host "进程崩溃 ✗ ExitCode=$($p.ExitCode)"
+            exit 1
+          }
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: DeepSeekMeter-Windows
+          path: windows/src/DeepSeekMeter/bin/Release/net8.0-windows
