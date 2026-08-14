@@ -1,12 +1,16 @@
 import Foundation
 import Combine
 import ServiceManagement
+import Security
 
-/// 用户设置：平台 Token（钥匙串）+ 刷新间隔 + 开机自启（UserDefaults）
+/// 用户设置：平台 Token（UserDefaults）+ 刷新间隔 + 开机自启
+/// 说明：Token 是登录态会话凭证，存偏好文件即可避免钥匙串每次启动弹密码授权
 @MainActor
 final class SettingsStore: ObservableObject {
     @Published var platformToken: String {
-        didSet { KeychainStore.savePlatformToken(platformToken) }
+        didSet {
+            UserDefaults.standard.set(platformToken, forKey: Keys.platformToken)
+        }
     }
     @Published var platformUserName: String {
         didSet { UserDefaults.standard.set(platformUserName, forKey: Keys.platformUserName) }
@@ -27,25 +31,59 @@ final class SettingsStore: ObservableObject {
     static let intervalOptions: [TimeInterval] = [15, 30, 60, 300, 600]
 
     private enum Keys {
+        static let platformToken = "settings.platformToken"
+        static let platformUserName = "settings.platformUserName"
         static let refreshInterval = "settings.refreshInterval"
         static let launchAtLogin = "settings.launchAtLogin"
-        static let platformUserName = "settings.platformUserName"
     }
 
     init() {
         let defaults = UserDefaults.standard
-        platformToken = KeychainStore.loadPlatformToken() ?? ""
+        // 先初始化全部存储属性（init 中赋值不会触发 didSet）
+        platformToken = defaults.string(forKey: Keys.platformToken) ?? ""
         platformUserName = defaults.string(forKey: Keys.platformUserName) ?? ""
         let saved = defaults.double(forKey: Keys.refreshInterval)
         refreshInterval = saved > 0 ? saved : 60
         launchAtLogin = defaults.bool(forKey: Keys.launchAtLogin)
+
+        // 一次性迁移：旧版本把 Token 存在钥匙串（ad-hoc 签名导致每次启动都要密码授权）
+        // 迁到 UserDefaults 后删除钥匙串条目，此后不再访问钥匙串
+        if platformToken.isEmpty, let legacy = Self.loadLegacyKeychainToken(), !legacy.isEmpty {
+            platformToken = legacy
+        }
+        Self.deleteLegacyKeychainToken()
+
         if launchAtLogin { applyLaunchAtLogin(true) } // 确保注册状态与设置一致
     }
 
     func clearPlatformToken() {
         platformToken = ""
         platformUserName = ""
-        KeychainStore.deletePlatformToken()
+    }
+
+    // MARK: - 旧版钥匙串迁移（一次性）
+
+    private static func loadLegacyKeychainToken() -> String? {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: "com.deepseek.meter",
+            kSecAttrAccount as String: "deepseek-platform-token",
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne
+        ]
+        var result: AnyObject?
+        guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess,
+              let data = result as? Data else { return nil }
+        return String(data: data, encoding: .utf8)
+    }
+
+    private static func deleteLegacyKeychainToken() {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: "com.deepseek.meter",
+            kSecAttrAccount as String: "deepseek-platform-token"
+        ]
+        SecItemDelete(query as CFDictionary)
     }
 
     private func applyLaunchAtLogin(_ enabled: Bool) {
