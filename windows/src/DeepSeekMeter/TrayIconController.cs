@@ -61,8 +61,6 @@ public sealed class TrayIconController : IDisposable
             _popover.Show();
             _popover.PositionNear(anchor ?? System.Windows.Forms.Cursor.Position);
         }
-        // 短暂忽略 Deactivated，避免 Show + Activate 过程把刚显示的窗口立刻 Hide 掉
-        _popover.SuppressHideFor(TimeSpan.FromMilliseconds(350));
         _popover.Activate();
     }
 
@@ -93,27 +91,49 @@ public sealed class TrayIconController : IDisposable
 
     private static Color StatusColor(MainViewModel model)
     {
-        if (model.LastBalance is { } balance)
+        switch (model.Status)
         {
-            if (balance.Total < 1) return Color.FromArgb(229, 72, 77);   // 红
-            if (balance.Total < 10) return Color.FromArgb(240, 158, 36); // 橙
-            return Color.FromArgb(46, 160, 67);                          // 绿
+            case DataStatus.Fresh:
+                if (model.LastBalance is { } balance)
+                {
+                    if (balance.Total < 1) return Color.FromArgb(229, 72, 77);   // 红
+                    if (balance.Total < 10) return Color.FromArgb(240, 158, 36); // 橙
+                }
+                return Color.FromArgb(46, 160, 67);                              // 绿
+            case DataStatus.Stale:
+                return Color.FromArgb(240, 158, 36);                             // 橙：旧数据
+            case DataStatus.Error:
+            case DataStatus.TokenExpired:
+                return Color.FromArgb(229, 72, 77);                              // 红
+            default: // Loading / NotLoggedIn
+                return Color.FromArgb(128, 128, 128);                            // 灰
         }
-        return model.LastError is not null
-            ? Color.FromArgb(229, 72, 77)   // 异常红
-            : Color.FromArgb(128, 128, 128); // 未登录灰
     }
 
     private static string Tooltip(MainViewModel model)
     {
+        switch (model.Status)
+        {
+            case DataStatus.TokenExpired:
+                return "登录已过期，点击重新登录";
+            case DataStatus.Error:
+                return model.LastError ?? "获取失败";
+            case DataStatus.Stale:
+            {
+                var stale = model.LastError ?? "数据可能已过期";
+                if (model.LastUpdate is { } t)
+                    stale += $" · 最后成功 {t:HH:mm:ss}";
+                return stale.Length > 63 ? stale[..63] : stale;
+            }
+        }
         if (model.LastBalance is { } balance)
         {
             var line = $"余额 {Formatting.CurrencySymbol(balance.Currency)}{Formatting.Format(balance.Total)}";
             if (model.LastUpdate is { } t)
                 line += $" · 最后更新 {t:HH:mm:ss}";
-            return line.Length > 63 ? line[..63] : line; // Win32 托盘 Tooltip 上限 63 字符
+            return line.Length > 63 ? line[..63] : line;
         }
-        return model.LastError ?? "DeepSeek Meter · 未登录";
+        return "DeepSeek Meter · 未登录";
     }
 
     /// <summary>运行时绘制仪表盘图标（外环 + 指针），颜色随状态。</summary>

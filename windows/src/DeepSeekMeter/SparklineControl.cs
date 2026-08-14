@@ -40,12 +40,16 @@ public sealed class SparklineControl : System.Windows.FrameworkElement
         double chartHeight = height - labelHeight;
         double slot = width / entries.Count;
         double barWidth = Math.Max(2, Math.Min(8, slot - 2));
+        // 高 DPI 下文字/柱子保持清晰：pixelsPerDip 用当前视觉 DPI，而非固定 1.0
+        double pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip;
 
         var accent = (Color)System.Windows.Application.Current.Resources["AccentColor"];
         var emptyBrush = new SolidColorBrush(Color.FromArgb(20, 128, 128, 128));
         emptyBrush.Freeze();
         var accentBrush = new SolidColorBrush(accent);
         accentBrush.Freeze();
+        var labelBrush = new SolidColorBrush(Color.FromArgb(160, 128, 128, 128));
+        labelBrush.Freeze();
 
         for (int i = 0; i < entries.Count; i++)
         {
@@ -62,20 +66,21 @@ public sealed class SparklineControl : System.Windows.FrameworkElement
                 radiusX: 1.5,
                 radiusY: 1.5);
 
-            // 日期标签（天）
+            // 日期标签（天）：居中于对应柱子正下方
             var text = new FormattedText(
                 entry.Date.Day.ToString(),
                 System.Globalization.CultureInfo.InvariantCulture,
                 FlowDirection.LeftToRight,
                 new Typeface("Segoe UI"),
                 8,
-                Brushes.Gray,
-                1.0)
+                labelBrush,
+                pixelsPerDip)
             {
                 TextAlignment = TextAlignment.Center,
                 MaxTextWidth = slot,
             };
-            dc.DrawText(text, new Point(x - (slot - text.Width) / 2, chartHeight));
+            double textX = x + barWidth / 2 - text.Width / 2; // 柱子中心对齐
+            dc.DrawText(text, new Point(textX, chartHeight));
         }
     }
 }

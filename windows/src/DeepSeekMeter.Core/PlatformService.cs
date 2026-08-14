@@ -102,15 +102,18 @@ public sealed class PlatformService
 
     // MARK: - 接口
 
-    /// <summary>校验 Token 并返回用户信息（email、currency）。</summary>
+    /// <summary>校验 Token 并返回用户信息（email、currency）；data / biz_data 为空视为校验失败。</summary>
     public async Task<UserInfo> FetchCurrentUserAsync(string token, CancellationToken ct = default)
     {
         var response = await GetAsync<CurrentUserResponse>("/auth-api/v0/users/current", token, ct);
         EnsureSuccess(response.Code, response.Msg);
-        if (response.Data is not null)
-            EnsureBizSuccess(response.Data.BizCode, response.Data.BizMsg);
-        var user = response.Data?.BizData;
-        return new UserInfo(user?.Email ?? "", user?.Currency ?? "CNY");
+        if (response.Data is null)
+            throw PlatformException.Api(response.Code, "用户信息为空");
+        EnsureBizSuccess(response.Data.BizCode, response.Data.BizMsg);
+        var user = response.Data.BizData;
+        if (user is null || string.IsNullOrEmpty(user.Id))
+            throw PlatformException.Api(response.Code, "用户信息为空");
+        return new UserInfo(user.Email ?? "", user.Currency ?? "CNY");
     }
 
     /// <summary>平台侧账户汇总（余额 / 累计消费）。</summary>

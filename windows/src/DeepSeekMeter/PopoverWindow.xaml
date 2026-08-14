@@ -152,10 +152,10 @@
                             </StackPanel>
                         </Border>
                         <TextBlock x:Name="TimeText" Text="" FontSize="10" Foreground="#9A9AA6" VerticalAlignment="Center" Margin="8,0,8,0" />
-                        <ToggleButton x:Name="PinButton" Content="📌" Style="{StaticResource IconButton}"
-                                      FontSize="11" ToolTip="固定窗口（点击外部不关闭）" Cursor="Hand"
+                        <ToggleButton x:Name="PinButton" Content="&#xE718;" FontFamily="Segoe MDL2 Assets" Style="{StaticResource IconButton}"
+                                      FontSize="11" ToolTip="置顶（保持在所有窗口最前）" Cursor="Hand" IsChecked="True"
                                       Width="26" Height="26" Click="OnPinClick" />
-                        <Button Content="✕" Style="{StaticResource IconButton}" ToolTip="隐藏"
+                        <Button Content="&#xE711;" FontFamily="Segoe MDL2 Assets" Style="{StaticResource IconButton}" ToolTip="隐藏"
                                 Click="OnCloseClick" Margin="2,0,0,0" />
                     </StackPanel>
                 </Grid>

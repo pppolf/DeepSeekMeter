@@ -17,6 +17,8 @@ public sealed class MainViewModel : INotifyPropertyChanged
     private readonly PlatformService _service = new();
     private DispatcherTimer? _timer;
     private LoginWindow? _loginWindow;
+    private int _consecutiveFailures;
+    private double _baseIntervalSeconds = 60;
 
     private BalanceInfo? _lastBalance;
     private DateTime? _lastUpdate;
@@ -26,6 +28,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
     private string? _usageError;
     private bool _platformTokenExpired;
     private bool _isFetching;
+    private string _currency = "CNY";
 
     public MainViewModel(SettingsStore settings)
     {
@@ -34,10 +37,25 @@ public sealed class MainViewModel : INotifyPropertyChanged
 
     // MARK: - 绑定属性
 
+    /// <summary>数据可信度状态（托盘/悬浮窗/错误提示共用）。</summary>
+    public DataStatus Status =>
+        DataState.Evaluate(Settings.PlatformToken, PlatformTokenExpired, HasData, HasError);
+
+    private bool HasData => LastBalance is not null || MonthUsage is not null;
+
+    private bool HasError => LastError is not null || UsageError is not null;
+
+    /// <summary>当前账户币种（余额/登录接口返回，用于费用展示，不再写死 CNY）。</summary>
+    public string Currency
+    {
+        get => _currency;
+        private set { if (_currency != value) { _currency = value; OnPropertyChanged(); } }
+    }
+
     public BalanceInfo? LastBalance
     {
         get => _lastBalance;
-        private set { if (!Equals(_lastBalance, value)) { _lastBalance = value; OnPropertyChanged(); } }
+        private set { if (!Equals(_lastBalance, value)) { _lastBalance = value; OnPropertyChanged(); OnPropertyChanged(nameof(Status)); } }
     }
 
     public DateTime? LastUpdate
@@ -49,25 +67,25 @@ public sealed class MainViewModel : INotifyPropertyChanged
     public string? LastError
     {
         get => _lastError;
-        private set { if (_lastError != value) { _lastError = value; OnPropertyChanged(); } }
+        private set { if (_lastError != value) { _lastError = value; OnPropertyChanged(); OnPropertyChanged(nameof(Status)); } }
     }
 
     public MonthUsage? MonthUsage
     {
         get => _monthUsage;
-        private set { if (!ReferenceEquals(_monthUsage, value)) { _monthUsage = value; OnPropertyChanged(); } }
+        private set { if (!ReferenceEquals(_monthUsage, value)) { _monthUsage = value; OnPropertyChanged(); OnPropertyChanged(nameof(Status)); } }
     }
 
     public string? UsageError
     {
         get => _usageError;
-        private set { if (_usageError != value) { _usageError = value; OnPropertyChanged(); } }
+        private set { if (_usageError != value) { _usageError = value; OnPropertyChanged(); OnPropertyChanged(nameof(Status)); } }
     }
 
     public bool PlatformTokenExpired
     {
         get => _platformTokenExpired;
-        private set { if (_platformTokenExpired != value) { _platformTokenExpired = value; OnPropertyChanged(); } }
+        private set { if (_platformTokenExpired != value) { _platformTokenExpired = value; OnPropertyChanged(); OnPropertyChanged(nameof(Status)); } }
     }
 
     public bool IsFetching
@@ -84,12 +102,12 @@ public sealed class MainViewModel : INotifyPropertyChanged
     public void StartPolling()
     {
         StopPolling();
-        var interval = TimeSpan.FromSeconds(Settings.RefreshInterval);
+        _baseIntervalSeconds = Settings.RefreshInterval;
         _timer = new DispatcherTimer(DispatcherPriority.Background)
         {
-            Interval = interval,
+            Interval = TimeSpan.FromSeconds(_baseIntervalSeconds),
         };
-        _timer.Tick += async (_, _) => await RefreshAsync();
+        _timer.Tick += async (_, _) => await AutoRefreshAsync();
         _timer.Start();
         _ = RefreshAsync(); // 启动时立即拉一次
     }
@@ -104,12 +122,35 @@ public sealed class MainViewModel : INotifyPropertyChanged
     public void SetRefreshInterval(double interval)
     {
         Settings.RefreshInterval = interval;
+        _consecutiveFailures = 0; // 手动改间隔重置退避
         StartPolling();
     }
 
     public async Task RefreshAsync()
     {
         await PerformRefreshAsync();
+    }
+
+    /// <summary>定时自动刷新；连续失败时按指数退避拉长间隔。</summary>
+    private async Task AutoRefreshAsync()
+    {
+        await PerformRefreshAsync();
+        ApplyBackoff();
+    }
+
+    /// <summary>连续失败时指数退避（最多 10 分钟），成功恢复基础间隔。</summary>
+    private void ApplyBackoff()
+    {
+        if (_timer is null) return;
+        if (_consecutiveFailures > 0)
+        {
+            var factor = Math.Pow(2, Math.Min(_consecutiveFailures, 4)); // 2/4/8/16 倍
+            _timer.Interval = TimeSpan.FromSeconds(Math.Min(_baseIntervalSeconds * factor, 600));
+        }
+        else
+        {
+            _timer.Interval = TimeSpan.FromSeconds(_baseIntervalSeconds);
+        }
     }
 
     // MARK: - 拉取
@@ -120,8 +161,15 @@ public sealed class MainViewModel : INotifyPropertyChanged
         IsFetching = true;
         try
         {
-            await FetchBalanceAsync();
-            await FetchUsageAsync();
+            // 余额与用量并发执行，减少一次刷新总耗时
+            await Task.WhenAll(FetchBalanceAsync(), FetchUsageAsync());
+            _consecutiveFailures = 0;
+        }
+        catch (Exception ex)
+        {
+            // 兜底：任何未捕获异常都转为应用错误，不导致程序退出
+            LastError = ex.Message;
+            _consecutiveFailures++;
         }
         finally
         {
@@ -141,24 +189,35 @@ public sealed class MainViewModel : INotifyPropertyChanged
         {
             var summary = await _service.FetchSummaryAsync(Settings.PlatformToken);
             var wallet = summary.NormalWallets.FirstOrDefault();
-            if (wallet is not null)
+            if (wallet is null)
             {
-                var bonus = summary.BonusWallets.FirstOrDefault()?.Value ?? 0;
-                LastBalance = new BalanceInfo
-                {
-                    Currency = wallet.Currency,
-                    TotalBalance = wallet.Balance,
-                    GrantedBalance = bonus.ToString(CultureInfo.InvariantCulture),
-                    ToppedUpBalance = Math.Max(0, wallet.Value - bonus).ToString(CultureInfo.InvariantCulture),
-                };
-                LastUpdate = DateTime.Now;
-                LastError = null;
+                // 接口成功但钱包列表为空：识别为明确空状态，不保留旧余额
+                LastBalance = null;
+                LastError = "余额数据为空";
+                return;
             }
+            var bonus = summary.BonusWallets.FirstOrDefault()?.Value ?? 0;
+            LastBalance = new BalanceInfo
+            {
+                Currency = wallet.Currency,
+                TotalBalance = wallet.Balance,
+                GrantedBalance = bonus.ToString(CultureInfo.InvariantCulture),
+                ToppedUpBalance = Math.Max(0, wallet.Value - bonus).ToString(CultureInfo.InvariantCulture),
+            };
+            Currency = wallet.Currency; // 同步账户币种
+            LastUpdate = DateTime.Now;
+            LastError = null;
         }
         catch (PlatformException ex)
         {
+            // 保留旧余额，仅标记错误（旧数据由 Status=Stale 标注「可能过期」）
             LastError = ex.Message;
-            if (ex.IsTokenExpired) PlatformTokenExpired = true;
+            _consecutiveFailures++;
+            if (ex.IsTokenExpired)
+            {
+                PlatformTokenExpired = true;
+                StopPolling(); // Token 过期暂停高频自动刷新，等待重新登录
+            }
         }
     }
 
@@ -189,11 +248,18 @@ public sealed class MainViewModel : INotifyPropertyChanged
             };
             UsageError = null;
             PlatformTokenExpired = false;
+            LastUpdate = DateTime.Now; // 最后成功时间
         }
         catch (PlatformException ex)
         {
+            // 保留旧用量，仅标记错误
             UsageError = ex.Message;
-            if (ex.IsTokenExpired) PlatformTokenExpired = true;
+            _consecutiveFailures++;
+            if (ex.IsTokenExpired)
+            {
+                PlatformTokenExpired = true;
+                StopPolling(); // Token 过期暂停高频自动刷新，等待重新登录
+            }
         }
     }
 
@@ -231,10 +297,13 @@ public sealed class MainViewModel : INotifyPropertyChanged
             var user = await _service.FetchCurrentUserAsync(trimmed);
             Settings.PlatformToken = trimmed;
             Settings.PlatformUserName = user.Email;
+            Currency = user.Currency;
             UsageError = null;
             PlatformTokenExpired = false;
             await FetchUsageAsync();
             await FetchBalanceAsync();
+            _consecutiveFailures = 0;
+            StartPolling(); // 重新登录成功后恢复自动刷新
             return UsageError is null && LastError is null;
         }
         catch (PlatformException ex)
@@ -247,12 +316,17 @@ public sealed class MainViewModel : INotifyPropertyChanged
 
     public void ClearPlatformToken()
     {
+        // 同时清除应用 Token 与 WebView2 网页登录数据（Cookie/localStorage），允许真正切换账号
+        var webDataCleared = LoginWindow.ClearWebViewData();
         Settings.ClearPlatformToken();
         MonthUsage = null;
         UsageError = null;
         LastBalance = null;
-        LastError = null;
         PlatformTokenExpired = false;
+        Currency = "CNY";
+        LastError = webDataCleared
+            ? null
+            : "已退出登录；网页登录数据清理失败，如需切换账号请重启应用";
     }
 
     // MARK: - INotifyPropertyChanged

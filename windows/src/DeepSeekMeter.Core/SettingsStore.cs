@@ -93,6 +93,12 @@ public sealed class SettingsStore : INotifyPropertyChanged
         PlatformUserName = "";
     }
 
+    /// <summary>设置保存失败时触发（参数为失败原因），供 UI 提示。</summary>
+    public event Action<string>? SaveFailed;
+
+    /// <summary>最近一次保存是否成功。</summary>
+    public bool LastSaveSucceeded { get; private set; } = true;
+
     // MARK: - 持久化
 
     private sealed class Snapshot
@@ -113,7 +119,9 @@ public sealed class SettingsStore : INotifyPropertyChanged
             if (snap is null) return;
             _platformToken = snap.PlatformToken ?? "";
             _platformUserName = snap.PlatformUserName ?? "";
-            _refreshInterval = (snap.RefreshInterval is > 0) ? snap.RefreshInterval!.Value : 60;
+            // 刷新间隔只接受项目已有合法选项，损坏/非法值回退 1 分钟
+            var loaded = (snap.RefreshInterval is > 0) ? snap.RefreshInterval!.Value : 60;
+            _refreshInterval = IntervalOptions.Contains(loaded) ? loaded : 60;
             _launchAtLogin = snap.LaunchAtLogin ?? false;
         }
         catch (Exception ex)
@@ -141,10 +149,14 @@ public sealed class SettingsStore : INotifyPropertyChanged
             var tmp = SettingsFilePath + ".tmp";
             File.WriteAllText(tmp, json);
             File.Move(tmp, SettingsFilePath, overwrite: true);
+            LastSaveSucceeded = true;
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"[DeepSeekMeter] 保存设置失败：{ex.Message}");
+            LastSaveSucceeded = false;
+            var reason = ex.Message;
+            System.Diagnostics.Debug.WriteLine($"[DeepSeekMeter] 保存设置失败：{reason}");
+            SaveFailed?.Invoke(reason); // 让界面知道设置未成功保存
         }
     }
 

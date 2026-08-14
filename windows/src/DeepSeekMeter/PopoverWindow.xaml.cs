@@ -13,8 +13,7 @@ public partial class PopoverWindow : Window
 {
     private readonly MainViewModel _model;
     private bool _suppressEvents;
-    private bool _pinned;
-    private DateTime _suppressHideUntil = DateTime.MinValue;
+    private bool _topmost = true;
 
     /// <summary>模型用量行（UI 展示用）。</summary>
     private sealed record ModelRow(string Name, string Detail);
@@ -24,13 +23,11 @@ public partial class PopoverWindow : Window
 
     private TrendMetric _trend = TrendMetric.Output;
 
-    /// <summary>短暂忽略 Deactivated（Show + Activate 过程的失活不触发隐藏）。</summary>
-    public void SuppressHideFor(TimeSpan span) => _suppressHideUntil = DateTime.Now + span;
-
     public PopoverWindow(MainViewModel model)
     {
         InitializeComponent();
         _model = model;
+        SetTopmost(true); // 默认置顶：启动即在前台可见，不藏后台
         _model.PropertyChanged += (_, _) => Refresh();
         _model.Settings.PropertyChanged += (_, _) => Refresh(); // 开机自启回滚等设置变化时同步 UI
         Loaded += (_, _) =>
@@ -128,19 +125,20 @@ public partial class PopoverWindow : Window
         }
     }
 
-    // MARK: - 钉住
+    // MARK: - 置顶（图钉按钮控制是否在所有窗口之上；点击外部不隐藏窗口）
 
     private void OnPinClick(object sender, RoutedEventArgs e)
     {
-        SetPinned(!_pinned);
+        SetTopmost(PinButton.IsChecked == true);
     }
 
-    private void SetPinned(bool pinned)
+    private void SetTopmost(bool topmost)
     {
-        _pinned = pinned;
-        PinButton.IsChecked = pinned;
-        PinButton.Opacity = pinned ? 1.0 : 0.45;
-        PinButton.ToolTip = pinned ? "已固定（点击外部不关闭）" : "固定窗口（点击外部不关闭）";
+        _topmost = topmost;
+        Topmost = topmost;
+        PinButton.IsChecked = topmost;
+        PinButton.Opacity = topmost ? 1.0 : 0.45;
+        PinButton.ToolTip = topmost ? "已置顶（保持在所有窗口最前）" : "置顶（保持在所有窗口最前）";
     }
 
     // MARK: - 刷新全部 UI
@@ -185,29 +183,39 @@ public partial class PopoverWindow : Window
 
     private void UpdateHeader()
     {
-        var hasBalance = _model.LastBalance is not null;
-        var hasError = _model.LastError is not null;
+        switch (_model.Status)
+        {
+            case DataStatus.Fresh:
+                SetStatus("可用", Color.FromRgb(46, 160, 67));
+                break;
+            case DataStatus.Stale:
+                SetStatus("数据可能过期", Color.FromRgb(240, 158, 36));
+                break;
+            case DataStatus.Error:
+                SetStatus("异常", Color.FromRgb(229, 72, 77));
+                break;
+            case DataStatus.TokenExpired:
+                SetStatus("已过期", Color.FromRgb(229, 72, 77));
+                break;
+            case DataStatus.Loading:
+                SetStatus("加载中", Color.FromRgb(136, 136, 136));
+                break;
+            default: // NotLoggedIn
+                SetStatus("未登录", Color.FromRgb(136, 136, 136));
+                break;
+        }
 
-        if (hasBalance)
-        {
-            StatusText.Text = "可用";
-            StatusText.Foreground = new SolidColorBrush(Color.FromRgb(46, 160, 67));
-            StatusDot.Fill = new SolidColorBrush(Color.FromRgb(46, 160, 67));
-        }
-        else if (hasError)
-        {
-            StatusText.Text = "异常";
-            StatusText.Foreground = new SolidColorBrush(Color.FromRgb(229, 72, 77));
-            StatusDot.Fill = new SolidColorBrush(Color.FromRgb(229, 72, 77));
-        }
-        else
-        {
-            StatusText.Text = "未获取";
-            StatusText.Foreground = new SolidColorBrush(Color.FromRgb(136, 136, 136));
-            StatusDot.Fill = new SolidColorBrush(Color.FromRgb(136, 136, 136));
-        }
+        // Stale 时明确标注「最后成功时间」
+        TimeText.Text = _model.LastUpdate is { } t
+            ? (_model.Status == DataStatus.Stale ? $"最后成功 {t:HH:mm:ss}" : t.ToString("HH:mm:ss"))
+            : "";
+    }
 
-        TimeText.Text = _model.LastUpdate is { } t ? t.ToString("HH:mm:ss") : "";
+    private void SetStatus(string text, Color color)
+    {
+        StatusText.Text = text;
+        StatusText.Foreground = new SolidColorBrush(color);
+        StatusDot.Fill = new SolidColorBrush(color);
     }
 
     // MARK: - 余额
@@ -237,7 +245,18 @@ public partial class PopoverWindow : Window
     private void UpdateUsage()
     {
         var usage = _model.MonthUsage;
-        var expiredOrError = _model.PlatformTokenExpired || _model.UsageError is not null;
+        var symbol = Formatting.CurrencySymbol(_model.Currency);
+
+        // Token 过期最优先：不能被已有 MonthUsage 遮住
+        if (_model.PlatformTokenExpired)
+        {
+            UsageContent.Visibility = Visibility.Collapsed;
+            LoadingPanel.Visibility = Visibility.Collapsed;
+            LoginPromptPanel.Visibility = Visibility.Collapsed;
+            ExpiredPanel.Visibility = Visibility.Visible;
+            ExpiredText.Text = "平台登录已过期，请重新登录";
+            return;
+        }
 
         if (usage is not null)
         {
@@ -246,7 +265,6 @@ public partial class PopoverWindow : Window
             LoginPromptPanel.Visibility = Visibility.Collapsed;
             ExpiredPanel.Visibility = Visibility.Collapsed;
 
-            var symbol = Formatting.CurrencySymbol("CNY");
             MonthTitleText.Text = $"{usage.Year}年{usage.Month}月用量";
             TotalCostText.Text = $"累计 {symbol}{Formatting.Format(usage.TotalCost)}";
 
@@ -274,16 +292,13 @@ public partial class PopoverWindow : Window
                 .ToList();
             ModelList.ItemsSource = rows;
         }
-        else if (expiredOrError)
+        else if (_model.UsageError is not null)
         {
             UsageContent.Visibility = Visibility.Collapsed;
             LoadingPanel.Visibility = Visibility.Collapsed;
             LoginPromptPanel.Visibility = Visibility.Collapsed;
             ExpiredPanel.Visibility = Visibility.Visible;
-
-            ExpiredText.Text = _model.PlatformTokenExpired
-                ? "平台登录已过期，请重新登录"
-                : (_model.UsageError ?? "用量获取失败");
+            ExpiredText.Text = _model.UsageError;
         }
         else if (_model.IsFetching)
         {
@@ -318,9 +333,8 @@ public partial class PopoverWindow : Window
             return;
         }
 
-        // 空 AmountDays（无用量 / 空 days / 新账号）：清空图表，不计算 Max
-        var todayKey = usage.LatestAmountDate;
-        if (todayKey is null)
+        // 空 AmountDays（无用量 / 空 days / 新账号）：清空图表
+        if (usage.AmountDays.Count == 0)
         {
             TrendChart.Entries = [];
             TrendTodayText.Text = "今日 —";
@@ -329,10 +343,12 @@ public partial class PopoverWindow : Window
             return;
         }
 
+        // 用「真实的今天」过滤未来数据（不能用数据最大日期），并按日期升序排序
+        var todayStr = DateTime.Today.ToString("yyyy-MM-dd");
         var entries = new List<SparklineControl.Entry>();
-        foreach (var day in usage.AmountDays)
+        foreach (var day in usage.AmountDays.OrderBy(d => d.Date, StringComparer.Ordinal))
         {
-            if (string.CompareOrdinal(day.Date, todayKey) > 0) continue;
+            if (string.CompareOrdinal(day.Date, todayStr) > 0) continue;
             if (!DateTime.TryParseExact(day.Date, "yyyy-MM-dd",
                     System.Globalization.CultureInfo.InvariantCulture,
                     System.Globalization.DateTimeStyles.None, out var date)) continue;
@@ -454,11 +470,9 @@ public partial class PopoverWindow : Window
         UpdateTrend();
     }
 
-    /// <summary>点击外部自动关闭（对齐 NSPopover transient 行为）；钉住时不关闭。</summary>
+    /// <summary>点击外部不隐藏窗口：窗口只通过 ✕ / Esc / 托盘左键隐藏，置顶由图钉按钮独立控制。</summary>
     private void OnDeactivated(object? sender, EventArgs e)
     {
-        if (_pinned) return; // 已固定：点击外部保持显示
-        if (DateTime.Now < _suppressHideUntil) return; // Show + Activate 阶段的临时失活不隐藏
-        Hide();
+        // 刻意留空：失焦不隐藏
     }
 }
