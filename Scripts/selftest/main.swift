@@ -23,6 +23,28 @@ check(currencySymbol("HKD") == "HK$", "HKD -> HK$")
 check(currencySymbol("GBP") == "£", "GBP -> £")
 check(currencySymbol("XXX") == "XXX", "未知币种原样返回")
 
+// 1.5 平台时区对齐：北京时间（UTC+8）计日，与 usage/cost、usage/amount 的 days 口径一致
+var utcComps = DateComponents()
+utcComps.calendar = Calendar(identifier: .gregorian)
+utcComps.timeZone = TimeZone(identifier: "UTC")
+utcComps.year = 2026
+utcComps.month = 8
+utcComps.day = 14
+utcComps.hour = 16
+utcComps.minute = 30
+let cnMidnight = Calendar(identifier: .gregorian).date(from: utcComps)!
+check(MonthUsage.dayFormatter.string(from: cnMidnight) == "2026-08-15", "UTC 8/14 16:30 按北京时间归入 8/15")
+var shComps = DateComponents()
+shComps.calendar = Calendar(identifier: .gregorian)
+shComps.timeZone = TimeZone(identifier: "Asia/Shanghai")
+shComps.year = 2026
+shComps.month = 8
+shComps.day = 15
+shComps.hour = 23
+shComps.minute = 30
+let shLate = Calendar(identifier: .gregorian).date(from: shComps)!
+check(MonthUsage.dayFormatter.string(from: shLate) == "2026-08-15", "北京 8/15 23:30 仍归入 8/15")
+
 func XCTUnwrapSafe<T>(_ value: T?) throws -> T {
     guard let value else { throw NSError(domain: "unwrap", code: 1) }
     return value

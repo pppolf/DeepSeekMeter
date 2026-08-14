@@ -116,7 +116,7 @@ final class AppModel: ObservableObject {
         }
         do {
             let now = Date()
-            let calendar = Calendar.current
+            let calendar = MonthUsage.platformCalendar // 与平台统计口径一致（北京时间）
             let year = calendar.component(.year, from: now)
             let month = calendar.component(.month, from: now)
             async let amountFuture = platformService.fetchUsageAmount(token: settings.platformToken, month: month, year: year)
