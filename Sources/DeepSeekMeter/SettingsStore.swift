@@ -2,12 +2,9 @@ import Foundation
 import Combine
 import ServiceManagement
 
-/// 用户设置：API Key / 平台 Token（钥匙串）+ 刷新间隔 + 开机自启（UserDefaults）
+/// 用户设置：平台 Token（钥匙串）+ 刷新间隔 + 开机自启（UserDefaults）
 @MainActor
 final class SettingsStore: ObservableObject {
-    @Published var apiKey: String {
-        didSet { KeychainStore.saveAPIKey(apiKey) }
-    }
     @Published var platformToken: String {
         didSet { KeychainStore.savePlatformToken(platformToken) }
     }
@@ -37,18 +34,12 @@ final class SettingsStore: ObservableObject {
 
     init() {
         let defaults = UserDefaults.standard
-        apiKey = KeychainStore.loadAPIKey() ?? ""
         platformToken = KeychainStore.loadPlatformToken() ?? ""
         platformUserName = defaults.string(forKey: Keys.platformUserName) ?? ""
         let saved = defaults.double(forKey: Keys.refreshInterval)
         refreshInterval = saved > 0 ? saved : 60
         launchAtLogin = defaults.bool(forKey: Keys.launchAtLogin)
         if launchAtLogin { applyLaunchAtLogin(true) } // 确保注册状态与设置一致
-    }
-
-    func clearAPIKey() {
-        apiKey = ""
-        KeychainStore.deleteAPIKey()
     }
 
     func clearPlatformToken() {

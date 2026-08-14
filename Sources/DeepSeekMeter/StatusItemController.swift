@@ -2,6 +2,15 @@ import AppKit
 import SwiftUI
 import Combine
 
+/// 弹窗宿主：每次出现时重新计算内容尺寸，避免顶部/底部裁剪
+private final class PopoverHostViewController: NSViewController {
+    var onViewDidAppear: (() -> Void)?
+    override func viewDidAppear() {
+        super.viewDidAppear()
+        onViewDidAppear?()
+    }
+}
+
 /// 菜单栏状态项 + 点击弹出的悬浮窗（NSPopover）
 @MainActor
 final class StatusItemController: NSObject {
@@ -22,18 +31,19 @@ final class StatusItemController: NSObject {
         }
 
         let hosting = NSHostingView(rootView: PopoverView(model: model))
-        let fitting = hosting.fittingSize
         let width: CGFloat = 340
-        let height: CGFloat = fitting.height > 0 ? fitting.height : 600
-        hosting.frame = NSRect(x: 0, y: 0, width: width, height: height)
-        let contentVC = NSViewController()
+        hosting.frame = NSRect(x: 0, y: 0, width: width, height: 620)
+        let contentVC = PopoverHostViewController()
         contentVC.view = hosting
+        contentVC.onViewDidAppear = { [weak self] in
+            Task { @MainActor [weak self] in self?.resizePopoverToFitContent() }
+        }
         popover.contentViewController = contentVC
-        popover.contentSize = NSSize(width: width, height: height)
+        popover.contentSize = NSSize(width: width, height: 620)
         popover.behavior = .transient // 点击外部自动关闭
         popover.animates = true
 
-        // 状态变化时刷新菜单栏文字/图标，并自适应弹窗高度
+        // 状态变化时刷新菜单栏文字/图标，并自适应弹窗尺寸
         model.objectWillChange
             .sink { [weak self] _ in
                 Task { @MainActor in
@@ -54,13 +64,16 @@ final class StatusItemController: NSObject {
         }
     }
 
+    /// 根据内容重新计算弹窗尺寸（不超屏幕，超出部分由 ScrollView 滚动）
     private func resizePopoverToFitContent() {
         guard let hosting = popover.contentViewController?.view as? NSHostingView<PopoverView> else { return }
         hosting.layoutSubtreeIfNeeded()
         let fitting = hosting.fittingSize
-        if fitting.height > 0 {
-            popover.contentSize = NSSize(width: 340, height: fitting.height)
-        }
+        let screenHeight = NSScreen.main?.visibleFrame.height ?? 900
+        let maxHeight = max(screenHeight - 80, 300)
+        let target = min(max(fitting.height, 320), maxHeight)
+        hosting.setFrameSize(NSSize(width: 340, height: target))
+        popover.contentSize = NSSize(width: 340, height: target)
     }
 
     func showPopover() {
@@ -96,9 +109,6 @@ final class StatusItemController: NSObject {
     }
 
     private static func titleColor(for model: AppModel?) -> NSColor {
-        if let available = model?.isAvailable, !available {
-            return .systemGray
-        }
         if let balance = model?.lastBalance {
             if balance.total < 1 { return .systemRed }
             if balance.total < 10 { return .systemOrange }

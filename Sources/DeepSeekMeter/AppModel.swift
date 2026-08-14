@@ -5,25 +5,22 @@ import Combine
 @MainActor
 final class AppModel: ObservableObject {
     let settings: SettingsStore
-    let trend: TrendStore
 
     @Published var lastBalance: BalanceInfo?
-    @Published var isAvailable: Bool?
     @Published var lastUpdate: Date?
     @Published var lastError: String?
 
     @Published var monthUsage: MonthUsage?
     @Published var usageError: String?
+    @Published var platformTokenExpired = false
 
     @Published var isFetching = false
 
-    private let service = BalanceService()
     private let platformService = PlatformService()
     private var timer: Timer?
 
-    init(settings: SettingsStore, trend: TrendStore) {
+    init(settings: SettingsStore) {
         self.settings = settings
-        self.trend = trend
     }
 
     // MARK: - 轮询
@@ -64,44 +61,34 @@ final class AppModel: ObservableObject {
         await fetchUsage()
     }
 
-    /// 余额：优先 API Key（/user/balance），否则用平台 Token（get_user_summary）
+    /// 余额（平台侧 get_user_summary）
     private func fetchBalance() async {
+        guard !settings.platformToken.isEmpty else {
+            lastBalance = nil
+            return
+        }
         do {
-            if !settings.apiKey.isEmpty {
-                let response = try await service.fetch(apiKey: settings.apiKey)
-                lastBalance = response.balanceInfos.first
-                isAvailable = response.isAvailable
+            let summary = try await platformService.fetchSummary(token: settings.platformToken)
+            if let wallet = summary.normalWallets.first {
+                let bonus = summary.bonusWallets.first?.value ?? 0
+                lastBalance = BalanceInfo(
+                    currency: wallet.currency,
+                    totalBalance: String(wallet.value),
+                    grantedBalance: String(bonus),
+                    toppedUpBalance: String(max(0, wallet.value - bonus))
+                )
                 lastUpdate = Date()
                 lastError = nil
-                if let info = response.balanceInfos.first {
-                    trend.add(info)
-                }
-            } else if !settings.platformToken.isEmpty {
-                let summary = try await platformService.fetchSummary(token: settings.platformToken)
-                if let wallet = summary.normalWallets.first {
-                    let bonus = summary.bonusWallets.first?.value ?? 0
-                    lastBalance = BalanceInfo(
-                        currency: wallet.currency,
-                        totalBalance: String(wallet.value),
-                        grantedBalance: String(bonus),
-                        toppedUpBalance: String(max(0, wallet.value - bonus))
-                    )
-                    isAvailable = true
-                    lastUpdate = Date()
-                    lastError = nil
-                    if let info = lastBalance {
-                        trend.add(info)
-                    }
-                }
-            } else {
-                lastError = BalanceError.emptyAPIKey.message
             }
         } catch {
-            lastError = (error as? BalanceError)?.message ?? error.localizedDescription
+            lastError = (error as? PlatformError)?.message ?? error.localizedDescription
+            if case PlatformError.api(let code, _) = error, code == 40002 || code == 40003 {
+                platformTokenExpired = true
+            }
         }
     }
 
-    /// 用量：平台 Token 拉取本月 usage/amount + usage/cost
+    /// 用量：拉取本月 usage/amount + usage/cost
     private func fetchUsage() async {
         guard !settings.platformToken.isEmpty else {
             monthUsage = nil
@@ -125,25 +112,38 @@ final class AppModel: ObservableObject {
                 amountDays: amountData.days ?? []
             )
             usageError = nil
+            platformTokenExpired = false
         } catch {
             usageError = (error as? PlatformError)?.message ?? error.localizedDescription
+            if case PlatformError.api(let code, _) = error, code == 40002 || code == 40003 {
+                platformTokenExpired = true
+            }
         }
     }
 
-    // MARK: - 凭证管理
+    // MARK: - 平台登录（内嵌官方页面）
 
-    /// 保存新的 API Key 并立即校验一次；返回是否成功
-    @discardableResult
-    func saveAPIKey(_ key: String) async -> Bool {
-        let trimmed = key.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else {
-            lastError = BalanceError.emptyAPIKey.message
-            return false
-        }
-        settings.apiKey = trimmed
-        await performRefresh()
-        return lastError == nil
+    private var loginController: LoginWindowController?
+
+    /// 打开内嵌登录窗口：登录成功后自动获取并校验 Token
+    func beginPlatformLogin() {
+        loginController = LoginWindowController(
+            onToken: { [weak self] token, _ in
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    let ok = await self.savePlatformToken(token)
+                    if ok {
+                        self.onLoginSucceeded?()
+                    }
+                }
+            },
+            onCancel: {}
+        )
+        loginController?.show()
     }
+
+    /// 登录成功回调（由 AppDelegate 设置，用于弹回悬浮窗）
+    var onLoginSucceeded: (() -> Void)?
 
     /// 保存新的平台 Token 并立即校验；返回是否成功
     @discardableResult
@@ -158,43 +158,25 @@ final class AppModel: ObservableObject {
             settings.platformToken = trimmed
             settings.platformUserName = user.email
             usageError = nil
+            platformTokenExpired = false
             await fetchUsage()
             await fetchBalance()
-            return usageError == nil
+            return usageError == nil && lastError == nil
         } catch {
             usageError = (error as? PlatformError)?.message ?? error.localizedDescription
+            if case PlatformError.api(let code, _) = error, code == 40002 || code == 40003 {
+                platformTokenExpired = true
+            }
             return false
         }
-    }
-
-    // MARK: - 平台登录（内嵌官方页面）
-
-    private var loginController: LoginWindowController?
-
-    /// 打开内嵌登录窗口：登录成功后自动获取并校验 Token
-    func beginPlatformLogin() {
-        loginController = LoginWindowController(
-            onToken: { [weak self] token, _ in
-                Task { @MainActor [weak self] in
-                    _ = await self?.savePlatformToken(token)
-                }
-            },
-            onCancel: {}
-        )
-        loginController?.show()
-    }
-
-    func clearAPIKey() {
-        settings.clearAPIKey()
-        lastBalance = nil
-        isAvailable = nil
-        lastUpdate = nil
-        lastError = nil
     }
 
     func clearPlatformToken() {
         settings.clearPlatformToken()
         monthUsage = nil
         usageError = nil
+        lastBalance = nil
+        lastError = nil
+        platformTokenExpired = false
     }
 }

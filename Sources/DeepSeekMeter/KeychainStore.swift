@@ -5,7 +5,6 @@ import Security
 enum KeychainStore {
     private static let service = "com.deepseek.meter"
 
-    static let apiKeyAccount = "deepseek-api-key"
     static let platformTokenAccount = "deepseek-platform-token"
 
     @discardableResult
@@ -47,9 +46,6 @@ enum KeychainStore {
     }
 
     // 便捷方法
-    static func saveAPIKey(_ v: String) -> Bool { save(v, account: apiKeyAccount) }
-    static func loadAPIKey() -> String? { load(account: apiKeyAccount) }
-    static func deleteAPIKey() { delete(account: apiKeyAccount) }
     static func savePlatformToken(_ v: String) -> Bool { save(v, account: platformTokenAccount) }
     static func loadPlatformToken() -> String? { load(account: platformTokenAccount) }
     static func deletePlatformToken() { delete(account: platformTokenAccount) }

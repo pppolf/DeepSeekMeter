@@ -12,43 +12,7 @@ func check(_ cond: Bool, _ name: String) {
     }
 }
 
-// 1. 官方 balance 接口 JSON 解码
-let json = """
-{
-  "is_available": true,
-  "balance_infos": [
-    {
-      "currency": "CNY",
-      "total_balance": "110.00",
-      "granted_balance": "10.00",
-      "topped_up_balance": "100.00"
-    }
-  ]
-}
-"""
-do {
-    let response = try JSONDecoder().decode(BalanceResponse.self, from: Data(json.utf8))
-    check(response.isAvailable, "解码 is_available")
-    check(response.balanceInfos.count == 1, "解码 balance_infos")
-    let info = response.balanceInfos[0]
-    check(info.currency == "CNY", "解码 currency")
-    check(abs(info.total - 110) < 0.0001, "解码 total_balance -> 110")
-    check(abs(info.granted - 10) < 0.0001, "解码 granted_balance -> 10")
-    check(abs(info.toppedUp - 100) < 0.0001, "解码 topped_up_balance -> 100")
-} catch {
-    check(false, "JSON 解码抛错：\(error)")
-}
-
-// 2. 账户不可用
-let json2 = #"{"is_available": false, "balance_infos": []}"#
-do {
-    let response = try JSONDecoder().decode(BalanceResponse.self, from: Data(json2.utf8))
-    check(!response.isAvailable && response.balanceInfos.isEmpty, "解码不可用账户")
-} catch {
-    check(false, "不可用账户解码抛错：\(error)")
-}
-
-// 3. 格式化与币种符号
+// 1. 格式化与币种符号
 check(format(110.0) == "110.00", "format(110.0) -> 110.00")
 check(format(0.35) == "0.35", "format(0.35) -> 0.35")
 check(format(1234.5) == "1234.5", "format(1234.5) -> 1234.5")
@@ -68,7 +32,7 @@ func PopoverViewHelpersCountString(_ n: Int) -> String {
     return formatter.string(from: NSNumber(value: n)) ?? "\(n)"
 }
 
-// 4. usage/amount 解码（真实返回结构）
+// 2. usage/amount 解码（真实返回结构）
 let amountJSON = """
 {"code":0,"msg":"","data":{"biz_code":0,"biz_msg":"","biz_data":{"total":[{"model":"deepseek-v4-pro","usage":[{"type":"PROMPT_TOKEN","amount":"0"},{"type":"PROMPT_CACHE_HIT_TOKEN","amount":"311932800"},{"type":"PROMPT_CACHE_MISS_TOKEN","amount":"1584089"},{"type":"RESPONSE_TOKEN","amount":"950284"},{"type":"REQUEST","amount":"1130"}]}],"days":[{"date":"2026-08-01","data":[{"model":"deepseek-v4-pro","usage":[{"type":"PROMPT_CACHE_HIT_TOKEN","amount":"100"},{"type":"RESPONSE_TOKEN","amount":"50"},{"type":"REQUEST","amount":"2"}]}]}]}}}
 """
@@ -95,7 +59,7 @@ do {
     check(false, "amount 解码抛错：\(error)")
 }
 
-// 5. usage/cost 解码（biz_data 是数组）
+// 3. usage/cost 解码（biz_data 是数组）
 let costJSON = """
 {"code":0,"msg":"","data":{"biz_code":0,"biz_msg":"","biz_data":[{"total":[{"model":"deepseek-v4-pro","usage":[{"type":"PROMPT_CACHE_HIT_TOKEN","amount":"7.7983200000000000"},{"type":"PROMPT_CACHE_MISS_TOKEN","amount":"4.7522670000000000"},{"type":"RESPONSE_TOKEN","amount":"5.7017040000000000"}]}],"days":[]}]}}
 """
@@ -112,7 +76,7 @@ do {
     check(false, "cost 解码抛错：\(error)")
 }
 
-// 6. get_user_summary 解码（snake_case）
+// 4. get_user_summary 解码（snake_case）
 let summaryJSON = """
 {"code":0,"msg":"","data":{"biz_code":0,"biz_msg":"","biz_data":{"normal_wallets":[{"currency":"CNY","balance":"40.2492316400000000","token_estimation":"0"}],"bonus_wallets":[{"currency":"CNY","balance":"0","token_estimation":"0"}],"total_costs":[{"currency":"CNY","amount":"19.7507683600000000"}]}}}
 """
@@ -129,7 +93,7 @@ do {
     check(false, "summary 解码抛错：\(error)")
 }
 
-// 7. 格式化工具
+// 5. 格式化工具
 check(format(311932800.0) == "311932800.0", "大数格式化")
 check(PopoverViewHelpersCountString(1130) == "1,130", "千分位")
 

@@ -1,7 +1,7 @@
 import AppKit
 import WebKit
 
-/// 登录窗口：内嵌官方登录页，登录后自动从页面 localStorage 提取并校验 userToken
+/// 登录窗口：内嵌官方登录页；登录后只读 localStorage，Token 校验在原生侧完成
 @MainActor
 final class LoginWindowController: NSObject, NSWindowDelegate, WKNavigationDelegate, WKUIDelegate {
     private var window: NSWindow?
@@ -10,9 +10,11 @@ final class LoginWindowController: NSObject, NSWindowDelegate, WKNavigationDeleg
     private var pollTimer: Timer?
     private var isChecking = false
     private var tokenReceived = false
+    private var lastSignature = ""
 
     private let dataStore = WKWebsiteDataStore.nonPersistent()
     private let statusLabel = NSTextField(labelWithString: "正在打开官方登录页…")
+    private let platformService = PlatformService()
 
     private let onToken: (String, String) -> Void
     private let onCancel: () -> Void
@@ -44,9 +46,8 @@ final class LoginWindowController: NSObject, NSWindowDelegate, WKNavigationDeleg
         window.isReleasedWhenClosed = false
         window.delegate = self
 
-        // 顶栏：状态 + 用系统浏览器打开
         let topBar = NSView(frame: NSRect(x: 0, y: 608, width: 480, height: 36))
-        statusLabel.frame = NSRect(x: 12, y: 8, width: 280, height: 20)
+        statusLabel.frame = NSRect(x: 12, y: 8, width: 300, height: 20)
         statusLabel.font = .systemFont(ofSize: 11)
         statusLabel.textColor = .secondaryLabelColor
         let browserButton = NSButton(title: "用系统浏览器打开", target: self, action: #selector(openInBrowser))
@@ -82,57 +83,120 @@ final class LoginWindowController: NSObject, NSWindowDelegate, WKNavigationDeleg
         pollTimer = nil
     }
 
+    private func setStatus(_ text: String) {
+        statusLabel.stringValue = text
+        NSLog("[DeepSeekMeter] login: \(text)")
+    }
+
     private func checkToken() {
         guard !isChecking, !tokenReceived, let webView else { return }
         isChecking = true
         let js = """
-(async () => {
-  const tryFetch = async (t) => {
-    try {
-      const r = await fetch('/auth-api/v0/users/current', {headers: {Authorization: 'Bearer ' + t, Accept: 'application/json'}});
-      const j = await r.json();
-      return (j && j.code === 0) ? (j.data && j.data.biz_data && j.data.biz_data.email) || 'ok' : null;
-    } catch (e) { return null; }
-  };
-  const direct = localStorage.getItem('userToken');
-  if (direct) {
-    let t = direct;
-    try { t = JSON.parse(direct).value || direct; } catch (e) {}
-    const email = await tryFetch(t);
-    if (email) return JSON.stringify({ token: t, email: email });
-  }
-  for (let i = 0; i < localStorage.length; i++) {
-    const k = localStorage.key(i) || '';
-    const v = localStorage.getItem(k) || '';
-    if (k.toLowerCase().indexOf('token') >= 0 && v.length > 40) {
-      let t = v;
-      try { t = JSON.parse(v).value || v; } catch (e) {}
-      const email = await tryFetch(t);
-      if (email) return JSON.stringify({ token: t, email: email });
+(() => {
+  try {
+    const pairs = {};
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      pairs[k] = localStorage.getItem(k);
     }
+    return JSON.stringify({ ok: true, data: pairs });
+  } catch (e) {
+    return JSON.stringify({ ok: false, error: String(e) });
   }
-  return JSON.stringify({ token: null });
 })()
 """
-        Task { @MainActor [weak self] in
-            await self?.runCheck(webView: webView, js: js)
+        webView.evaluateJavaScript(js) { [weak self] result, error in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                defer { self.isChecking = false }
+                guard !self.tokenReceived else { return }
+                if let error {
+                    self.setStatus("页面未就绪（\(error.localizedDescription)），等待登录…")
+                    return
+                }
+                guard let str = result as? String,
+                      let data = str.data(using: .utf8),
+                      let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                      json["ok"] as? Bool == true,
+                      let pairs = json["data"] as? [String: Any] else {
+                    self.setStatus("尚未就绪，等待登录完成…")
+                    return
+                }
+                let signature = Self.storageSignature(pairs)
+                if signature == self.lastSignature {
+                    self.setStatus("等待登录完成…")
+                    return
+                }
+                self.lastSignature = signature
+                let candidates = Self.tokenCandidates(from: pairs)
+                if candidates.isEmpty {
+                    self.setStatus("等待登录完成…")
+                    return
+                }
+                self.setStatus("检测到登录信息，校验中…")
+                NSLog("[DeepSeekMeter] login: candidates = \(candidates.count)")
+                await self.validate(candidates: candidates)
+            }
         }
     }
 
-    private func runCheck(webView: WKWebView, js: String) async {
-        defer { isChecking = false }
+    private static func storageSignature(_ pairs: [String: Any]) -> String {
+        pairs.keys.sorted().map { key in
+            let v = (pairs[key] as? String) ?? ""
+            return "\(key)=\(v.count):\(String(v.prefix(16)))"
+        }.joined(separator: "|")
+    }
+
+    private static func tokenCandidates(from pairs: [String: Any]) -> [String] {
+        func unwrap(_ raw: String) -> String {
+            if let data = raw.data(using: .utf8),
+               let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let v = obj["value"] as? String, !v.isEmpty {
+                return v
+            }
+            return raw
+        }
+        var result: [String] = []
+        func add(_ t: String) {
+            let trimmed = t.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmed.isEmpty && !result.contains(trimmed) { result.append(trimmed) }
+        }
+        // 1. userToken 优先
+        if let raw = pairs["userToken"] as? String, !raw.isEmpty {
+            add(unwrap(raw))
+        }
+        // 2. 键名含 token
+        for (key, value) in pairs {
+            guard let value = value as? String, !value.isEmpty else { continue }
+            if key.lowercased().contains("token") && value.count >= 20 {
+                add(unwrap(value))
+            }
+        }
+        // 3. 兜底：40~512 字符的长值
+        for (_, value) in pairs {
+            guard let value = value as? String, value.count >= 40, value.count <= 512 else { continue }
+            add(unwrap(value))
+        }
+        return result
+    }
+
+    private func validate(candidates: [String]) async {
         guard !tokenReceived else { return }
-        guard let value = try? await webView.callAsyncJavaScript(js, arguments: [:], in: nil, contentWorld: .page) else { return }
-        guard let str = value as? String,
-              let data = str.data(using: .utf8),
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let token = json["token"] as? String, !token.isEmpty else { return }
-        let email = json["email"] as? String ?? ""
-        tokenReceived = true
-        statusLabel.stringValue = "已获取 Token ✓"
-        stopPolling()
-        close()
-        onToken(token, email)
+        for token in candidates {
+            if tokenReceived { return }
+            do {
+                let user = try await platformService.fetchCurrentUser(token: token)
+                tokenReceived = true
+                setStatus("已获取 Token ✓")
+                stopPolling()
+                close()
+                onToken(token, user.email)
+                return
+            } catch {
+                NSLog("[DeepSeekMeter] login: 候选校验失败 - \(error.localizedDescription)")
+            }
+        }
+        setStatus("校验未通过，稍后自动重试…")
     }
 
     // MARK: - 窗口
@@ -179,6 +243,6 @@ final class LoginWindowController: NSObject, NSWindowDelegate, WKNavigationDeleg
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-        checkToken() // 页面加载完成立即尝试一次
+        checkToken()
     }
 }

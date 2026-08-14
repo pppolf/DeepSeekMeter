@@ -1,43 +1,16 @@
 import Foundation
 
-// MARK: - DeepSeek 余额 API 响应（GET https://api.deepseek.com/user/balance）
+// MARK: - 余额信息（由平台 get_user_summary 构造，供 UI 展示）
 
-struct BalanceResponse: Codable, Equatable {
-    let isAvailable: Bool
-    let balanceInfos: [BalanceInfo]
-
-    enum CodingKeys: String, CodingKey {
-        case isAvailable = "is_available"
-        case balanceInfos = "balance_infos"
-    }
-}
-
-struct BalanceInfo: Codable, Equatable {
+struct BalanceInfo: Equatable {
     let currency: String
     let totalBalance: String
     let grantedBalance: String
     let toppedUpBalance: String
 
-    enum CodingKeys: String, CodingKey {
-        case currency
-        case totalBalance = "total_balance"
-        case grantedBalance = "granted_balance"
-        case toppedUpBalance = "topped_up_balance"
-    }
-
     var total: Double { Double(totalBalance) ?? 0 }
     var granted: Double { Double(grantedBalance) ?? 0 }
     var toppedUp: Double { Double(toppedUpBalance) ?? 0 }
-}
-
-// MARK: - 余额快照（用于趋势 / 消耗统计）
-
-struct BalanceSnapshot: Codable, Equatable, Identifiable {
-    let time: Date
-    let total: Double
-    let granted: Double
-    let toppedUp: Double
-    var id: Date { time }
 }
 
 // MARK: - 平台用量模型（platform.deepseek.com 私有接口，需登录 userToken）
@@ -108,13 +81,6 @@ struct WalletCost: Decodable {
     var value: Double { Double(amount) ?? 0 }
 }
 
-/// 某天的费用（柱状图用）
-struct DailyCost: Identifiable {
-    let date: Date
-    let cost: Double
-    var id: Date { date }
-}
-
 /// 聚合后的本月用量（UI 直接使用）
 struct MonthUsage: Identifiable {
     let year: Int
@@ -157,16 +123,6 @@ struct MonthUsage: Identifiable {
         )
     }
 
-    /// 最近 n 天的每日费用（用于柱状图）
-    func dailyCosts(days n: Int, endingAt end: Date = Date()) -> [DailyCost] {
-        let calendar = Calendar.current
-        let startOfDay = calendar.startOfDay(for: end)
-        return (0..<n).reversed().compactMap { offset in
-            guard let date = calendar.date(byAdding: .day, value: -offset, to: startOfDay) else { return nil }
-            return DailyCost(date: date, cost: cost(on: date))
-        }
-    }
-
     // MARK: - 工具
 
     private func sumAmount(_ type: String) -> Double {
@@ -177,7 +133,7 @@ struct MonthUsage: Identifiable {
         Self.dayFormatter.string(from: date)
     }
 
-    private static let dayFormatter: DateFormatter = {
+    static let dayFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd"
         formatter.locale = Locale(identifier: "en_US_POSIX")

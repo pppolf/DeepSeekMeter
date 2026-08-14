@@ -4,34 +4,29 @@ import AppKit
 /// 悬浮窗主界面
 struct PopoverView: View {
     @ObservedObject var model: AppModel
-    @State private var draftKey = ""
-    @State private var showingKeyField = false
-    @State private var draftPlatformToken = ""
-    @State private var showingPlatformTokenField = false
+    @State private var trendMetric: TrendMetric = .output
 
     private var balance: BalanceInfo? { model.lastBalance }
 
     var body: some View {
-        VStack(spacing: 14) {
-            header
-            balanceSection
-            usageSection
-            trendSection
-            if let error = model.lastError {
-                errorBanner(error)
+        ScrollView {
+            VStack(spacing: 14) {
+                header
+                balanceSection
+                usageSection
+                tokenTrendSection
+                if let error = model.lastError {
+                    errorBanner(error)
+                }
+                Divider()
+                settingsSection
+                footer
             }
-            Divider()
-            settingsSection
-            footer
+            .padding(16)
+            .frame(width: 340)
         }
-        .padding(16)
         .frame(width: 340)
-        .onAppear {
-            draftKey = model.settings.apiKey
-            showingKeyField = model.settings.apiKey.isEmpty
-            draftPlatformToken = model.settings.platformToken
-            showingPlatformTokenField = model.settings.platformToken.isEmpty
-        }
+        .scrollIndicators(.hidden)
     }
 
     // MARK: - 头部
@@ -43,7 +38,7 @@ struct PopoverView: View {
                 .foregroundStyle(.blue)
             Text("DeepSeek Meter")
                 .font(.system(size: 14, weight: .semibold))
-            Spacer()
+            Spacer(minLength: 4)
             statusPill
             if let lastUpdate = model.lastUpdate {
                 Text(lastUpdate.formatted(date: .omitted, time: .standard))
@@ -67,13 +62,15 @@ struct PopoverView: View {
     }
 
     private var statusColor: Color {
-        if model.isAvailable == nil { return .gray }
-        return model.isAvailable == true ? .green : .red
+        if model.lastBalance != nil { return .green }
+        if model.lastError != nil { return .red }
+        return .gray
     }
 
     private var statusText: String {
-        if model.isAvailable == nil { return "未获取" }
-        return model.isAvailable == true ? "可用" : "不可用"
+        if model.lastBalance != nil { return "可用" }
+        if model.lastError != nil { return "异常" }
+        return "未获取"
     }
 
     // MARK: - 余额
@@ -124,7 +121,6 @@ struct PopoverView: View {
     private var usageSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             if let usage = model.monthUsage {
-                // 标题
                 HStack(spacing: 6) {
                     Text("\(usage.year)年\(usage.month)月用量")
                         .font(.caption)
@@ -134,7 +130,6 @@ struct PopoverView: View {
                         .font(.caption.weight(.semibold))
                         .monospacedDigit()
                 }
-                // 今日 / 本月统计
                 HStack(spacing: 10) {
                     statCell(title: "今日费用", value: "¥\(format(usage.cost(on: Date())))")
                     let today = usage.tokens(on: Date())
@@ -146,7 +141,6 @@ struct PopoverView: View {
                     statCell(title: "本月输出", value: Self.tokenString(usage.responseTokens))
                     statCell(title: "缓存命中", value: Self.tokenString(usage.cacheHitTokens))
                 }
-                // 模型明细
                 ForEach(usage.amountModels.filter { $0.requests > 0 }) { item in
                     HStack {
                         Text(Self.modelDisplayName(item.model))
@@ -160,24 +154,8 @@ struct PopoverView: View {
                             .foregroundStyle(.secondary)
                     }
                 }
-                // 每日费用柱状图
-                if !usage.costDays.isEmpty {
-                    DailyCostChart(costs: usage.dailyCosts(days: 14), currency: model.lastBalance?.currency)
-                        .frame(height: 34)
-                    Text("近14天每日费用")
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
-                }
-            } else if model.usageError != nil {
-                HStack(alignment: .top, spacing: 6) {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundStyle(.orange)
-                    Text(model.usageError ?? "")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Spacer(minLength: 0)
-                }
+            } else if model.platformTokenExpired || model.usageError != nil {
+                expiredOrErrorPrompt
             } else if model.isFetching {
                 HStack(spacing: 6) {
                     ProgressView()
@@ -187,27 +165,52 @@ struct PopoverView: View {
                         .foregroundStyle(.tertiary)
                 }
             } else {
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "person.badge.key")
-                            .foregroundStyle(.secondary)
-                        Text("配置平台 Token 后显示用量明细（费用 / Token / 请求）")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        Spacer(minLength: 0)
-                    }
-                    Button {
-                        model.beginPlatformLogin()
-                    } label: {
-                        Label("一键登录获取 Token", systemImage: "arrow.right.circle")
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                }
+                loginPrompt
             }
         }
         .padding(10)
         .background(Color.secondary.opacity(0.06), in: RoundedRectangle(cornerRadius: 10))
+    }
+
+    private var loginPrompt: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Image(systemName: "person.badge.key")
+                    .foregroundStyle(.secondary)
+                Text("登录后显示余额与用量明细")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Spacer(minLength: 0)
+            }
+            Button {
+                model.beginPlatformLogin()
+            } label: {
+                Label("一键登录", systemImage: "arrow.right.circle")
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.small)
+        }
+    }
+
+    private var expiredOrErrorPrompt: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .top, spacing: 6) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.orange)
+                Text(model.platformTokenExpired ? "平台登录已过期，请重新登录" : (model.usageError ?? "用量获取失败"))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+            }
+            Button {
+                model.beginPlatformLogin()
+            } label: {
+                Label("重新登录", systemImage: "arrow.clockwise.circle")
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+        }
     }
 
     private func statCell(title: String, value: String) -> some View {
@@ -224,49 +227,53 @@ struct PopoverView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    // MARK: - 趋势
+    // MARK: - Token 用量趋势（本月按天）
 
-    private var trendSection: some View {
+    private var tokenTrendSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
-                Text("近24小时趋势")
+                Text("Token 用量趋势")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Spacer()
-                deltaChip(label: "1小时", delta: model.trend.delta(since: 3600))
-                deltaChip(label: "今日", delta: model.trend.deltaToday())
-                deltaChip(label: "24小时", delta: model.trend.delta(since: 86400))
+                Picker("", selection: $trendMetric) {
+                    ForEach(TrendMetric.allCases) { metric in
+                        Text(metric.rawValue).tag(metric)
+                    }
+                }
+                .labelsHidden()
+                .pickerStyle(.segmented)
+                .controlSize(.mini)
+                .frame(width: 138)
             }
-            SparklineView(points: model.trend.series(hours: 24), height: 44)
-                .opacity(model.trend.snapshots.isEmpty ? 0.35 : 1)
-            if model.trend.snapshots.isEmpty {
-                Text("暂无历史数据，持续运行后将在这里显示余额变化趋势")
+
+            if let usage = model.monthUsage {
+                let entries = tokenDailyEntries(usage: usage, metric: trendMetric)
+                if entries.isEmpty {
+                    Text("本月暂无用量数据")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                } else {
+                    TokenDailyChart(entries: entries)
+                        .frame(height: 42)
+                    HStack(spacing: 4) {
+                        Text("今日 \(Self.tokenString(dailyValue(usage: usage, on: Date(), metric: trendMetric)))")
+                        Spacer()
+                        if let peak = entries.max(by: { $0.value < $1.value }) {
+                            Text("峰值 \(Self.tokenString(peak.value))（\(Self.dayLabel(peak.date))）")
+                        }
+                    }
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                }
+            } else if model.usageError == nil && !model.isFetching {
+                Text("登录后查看 Token 用量趋势")
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
             }
         }
         .padding(10)
         .background(Color.secondary.opacity(0.06), in: RoundedRectangle(cornerRadius: 10))
-    }
-
-    private func deltaChip(label: String, delta: Double?) -> some View {
-        HStack(spacing: 3) {
-            if let delta {
-                Image(systemName: delta >= 0 ? "arrow.up.right" : "arrow.down.right")
-                    .font(.system(size: 8, weight: .bold))
-                    .foregroundStyle(delta >= 0 ? .green : .orange)
-                Text("\(label) \(format(abs(delta)))")
-                    .font(.caption2.weight(.medium))
-                    .monospacedDigit()
-            } else {
-                Text(label)
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-            }
-        }
-        .padding(.horizontal, 6)
-        .padding(.vertical, 3)
-        .background(Color.secondary.opacity(0.1), in: Capsule())
     }
 
     // MARK: - 错误提示
@@ -289,66 +296,22 @@ struct PopoverView: View {
 
     private var settingsSection: some View {
         VStack(spacing: 12) {
-            // API Key
+            // 平台 Token（一键登录）
             HStack(spacing: 8) {
-                Text("API Key")
+                Text("平台账号")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .frame(width: 58, alignment: .leading)
-                if showingKeyField {
-                    SecureField("sk-…", text: $draftKey)
-                        .textFieldStyle(.roundedBorder)
-                        .font(.caption)
-                        .onSubmit { saveKey() }
-                    Button("保存") { saveKey() }
-                        .buttonStyle(.borderedProminent)
-                        .controlSize(.small)
-                } else {
-                    Text(maskedKey)
-                        .font(.caption.monospaced())
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                    Spacer()
-                    Button("修改") {
-                        draftKey = model.settings.apiKey
-                        showingKeyField = true
-                    }
-                    .buttonStyle(.link)
-                    .controlSize(.small)
-                }
-            }
-
-            // 平台 Token（用量鉴权）
-            HStack(spacing: 8) {
-                Text("平台Token")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .frame(width: 58, alignment: .leading)
-                if showingPlatformTokenField {
-                    SecureField("浏览器 userToken", text: $draftPlatformToken)
-                        .textFieldStyle(.roundedBorder)
-                        .font(.caption)
-                        .onSubmit { savePlatformToken() }
-                    Button("保存") { savePlatformToken() }
-                        .buttonStyle(.borderedProminent)
-                        .controlSize(.small)
-                } else if model.settings.platformToken.isEmpty {
-                    Text("未配置")
+                if model.settings.platformToken.isEmpty {
+                    Text("未登录")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     Spacer()
-                    Button("登录获取") { model.beginPlatformLogin() }
+                    Button("登录") { model.beginPlatformLogin() }
                         .buttonStyle(.borderedProminent)
                         .controlSize(.small)
-                    Button("手动粘贴") {
-                        draftPlatformToken = ""
-                        showingPlatformTokenField = true
-                    }
-                    .buttonStyle(.link)
-                    .controlSize(.small)
                 } else {
-                    Text("已配置 ✓")
+                    Text("已登录 ✓")
                         .font(.caption)
                         .foregroundStyle(.green)
                     if !model.settings.platformUserName.isEmpty {
@@ -358,15 +321,9 @@ struct PopoverView: View {
                             .lineLimit(1)
                     }
                     Spacer()
-                    Button("登录更新") { model.beginPlatformLogin() }
+                    Button("重新登录") { model.beginPlatformLogin() }
                         .buttonStyle(.link)
                         .controlSize(.small)
-                    Button("手动粘贴") {
-                        draftPlatformToken = model.settings.platformToken
-                        showingPlatformTokenField = true
-                    }
-                    .buttonStyle(.link)
-                    .controlSize(.small)
                 }
             }
 
@@ -406,13 +363,6 @@ struct PopoverView: View {
         }
     }
 
-    private var maskedKey: String {
-        let key = model.settings.apiKey
-        guard !key.isEmpty else { return "未设置" }
-        if key.count <= 10 { return "••••••" }
-        return "sk-••••••\(key.suffix(4))"
-    }
-
     private var intervalBinding: Binding<TimeInterval> {
         Binding(
             get: { model.settings.refreshInterval },
@@ -438,21 +388,31 @@ struct PopoverView: View {
         }
     }
 
-    private func saveKey() {
-        let key = draftKey.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !key.isEmpty else { return }
-        Task { @MainActor in
-            let ok = await model.saveAPIKey(key)
-            if ok { showingKeyField = false }
-        }
-    }
+    // MARK: - 底部
 
-    private func savePlatformToken() {
-        let token = draftPlatformToken.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !token.isEmpty else { return }
-        Task { @MainActor in
-            let ok = await model.savePlatformToken(token)
-            if ok { showingPlatformTokenField = false }
+    private var footer: some View {
+        HStack {
+            Button {
+                model.refresh()
+            } label: {
+                Label(model.isFetching ? "刷新中…" : "刷新", systemImage: "arrow.clockwise")
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .disabled(model.isFetching)
+
+            Spacer()
+
+            if !model.settings.platformToken.isEmpty {
+                Button("退出登录") { model.clearPlatformToken() }
+                    .buttonStyle(.plain)
+                    .controlSize(.small)
+                    .foregroundStyle(.secondary)
+            }
+
+            Button("退出") { NSApp.terminate(nil) }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
         }
     }
 
@@ -474,31 +434,47 @@ struct PopoverView: View {
         model.replacingOccurrences(of: "deepseek-", with: "")
     }
 
-    // MARK: - 底部
+    // MARK: - Token 趋势工具
 
-    private var footer: some View {
-        HStack {
-            Button {
-                model.refresh()
-            } label: {
-                Label(model.isFetching ? "刷新中…" : "刷新", systemImage: "arrow.clockwise")
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
-            .disabled(model.isFetching)
-
-            Spacer()
-
-            if !model.settings.apiKey.isEmpty {
-                Button("清除 Key") { model.clearAPIKey() }
-                    .buttonStyle(.plain)
-                    .controlSize(.small)
-                    .foregroundStyle(.secondary)
-            }
-
-            Button("退出") { NSApp.terminate(nil) }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
+    private func tokenDailyEntries(usage: MonthUsage, metric: TrendMetric) -> [TokenDailyEntry] {
+        let todayKey = Self.dayParser.string(from: Date())
+        return usage.amountDays.compactMap { day -> TokenDailyEntry? in
+            guard day.date <= todayKey, let date = Self.dayParser.date(from: day.date) else { return nil }
+            return TokenDailyEntry(date: date, value: dailyValue(day: day, metric: metric))
         }
     }
+
+    private func dailyValue(usage: MonthUsage, on date: Date, metric: TrendMetric) -> Double {
+        let key = Self.dayParser.string(from: date)
+        guard let day = usage.amountDays.first(where: { $0.date == key }) else { return 0 }
+        return dailyValue(day: day, metric: metric)
+    }
+
+    private func dailyValue(day: UsageDay, metric: TrendMetric) -> Double {
+        let resp = day.data.reduce(0) { $0 + $1.value(for: "RESPONSE_TOKEN") }
+        let hit = day.data.reduce(0) { $0 + $1.value(for: "PROMPT_CACHE_HIT_TOKEN") }
+        let miss = day.data.reduce(0) { $0 + $1.value(for: "PROMPT_CACHE_MISS_TOKEN") }
+        switch metric {
+        case .output: return resp
+        case .cacheHit: return hit
+        case .total: return resp + hit + miss
+        }
+    }
+
+    private static var dayParser: DateFormatter {
+        MonthUsage.dayFormatter
+    }
+
+    private static func dayLabel(_ date: Date) -> String {
+        let cal = Calendar.current
+        return "\(cal.component(.month, from: date))月\(cal.component(.day, from: date))日"
+    }
+}
+
+/// Token 趋势指标
+enum TrendMetric: String, CaseIterable, Identifiable {
+    case output = "输出"
+    case cacheHit = "缓存命中"
+    case total = "总量"
+    var id: String { rawValue }
 }
