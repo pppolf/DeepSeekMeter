@@ -7,3 +7,6 @@ build/
 windows/**/bin/
 windows/**/obj/
 windows/.vs/
+
+# VSCode 本地配置（不入库）
+.vscode/
