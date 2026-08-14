@@ -27,7 +27,7 @@
 ## 📋 环境要求
 
 - **macOS**：macOS 14+（Apple Silicon / Intel 均可）；Xcode Command Line Tools（`xcode-select --install`）——仅源码构建需要
-- **Windows**：Windows 10（1809+）/ 11；[.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0)——仅源码构建需要（WebView2 Runtime 随系统预装）
+- **Windows**：Windows 10（1809+）/ 11；从 Release 下载 ZIP 无需安装任何东西（自包含版本已打包 .NET 运行时，WebView2 Runtime 随系统预装）；仅源码构建需要 [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0)
 
 ## ⬇️ 安装
 
@@ -56,11 +56,22 @@ swift run                       # 开发模式直接跑
 ./Scripts/install.sh            # 构建 + 安装到 /Applications 并启动
 ```
 
+### Windows 下载（推荐）
+
+1. 在 [Releases 页面](https://github.com/pppolf/DeepSeekMeter/releases) 下载 `DeepSeekMeter-win-x64.zip`
+2. 解压到任意目录，双击 `DeepSeekMeter.exe` 运行（无需安装 .NET SDK）
+
 ### Windows 从源码构建
 
 ```powershell
 dotnet build windows/DeepSeekMeter.sln -c Release
 dotnet run --project windows/src/DeepSeekMeter -c Release
+```
+
+发布自包含 ZIP：
+
+```powershell
+pwsh Scripts/publish-windows.ps1    # 生成 windows/publish/DeepSeekMeter-win-x64.zip
 ```
 
 详见 [windows/README.md](windows/README.md)。

@@ -14,16 +14,28 @@ DeepSeekMeter 的 **Windows 版本**：一个轻量的**系统托盘小工具**�
 ## 📋 环境要求
 
 - Windows 10（1809+）或 Windows 11
-- [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0) —— 仅源码构建需要（运行时随应用发布）
-- WebView2 Runtime —— Windows 11 / Win10 1809+ 均已预装（Edge 自带），无需单独安装
+- **从 Release 下载 ZIP 的用户无需安装任何东西**（自包含版本已打包 .NET 运行时；WebView2 Runtime 随系统预装）
+- 仅源码构建需要 [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0)
 
 ## 🚀 快速开始
+
+### 从 Release 下载（推荐）
+
+1. 在仓库 [Releases 页面](https://github.com/pppolf/DeepSeekMeter/releases) 下载 `DeepSeekMeter-win-x64.zip`
+2. 解压到任意目录，双击 `DeepSeekMeter.exe` 运行（无需安装 .NET SDK）
+3. 托盘出现仪表盘图标，登录即可使用
 
 ### 从源码构建运行
 
 ```powershell
 dotnet build DeepSeekMeter.sln -c Release            # 构建
 dotnet run --project src/DeepSeekMeter -c Release    # 开发模式运行
+```
+
+发布自包含 ZIP：
+
+```powershell
+pwsh ../Scripts/publish-windows.ps1                    # 生成 windows/publish/DeepSeekMeter-win-x64.zip
 ```
 
 运行后：

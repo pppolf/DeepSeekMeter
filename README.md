@@ -27,7 +27,7 @@ A lightweight **macOS menu bar app** that keeps an eye on your DeepSeek account:
 ## 📋 Requirements
 
 - **macOS**: macOS 14+ (Apple Silicon or Intel); Xcode Command Line Tools (`xcode-select --install`) — only needed to build from source
-- **Windows**: Windows 10 (1809+) or 11; [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0) — only needed to build from source (WebView2 Runtime ships with the OS)
+- **Windows**: Windows 10 (1809+) or 11; the Release ZIP is self-contained (no install needed; WebView2 Runtime ships with the OS); [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0) only needed to build from source
 
 ## ⬇️ Install
 
@@ -45,11 +45,17 @@ swift run                       # run in dev mode
 ./Scripts/install.sh            # build, install to /Applications and launch
 ```
 
+### Windows (download)
+
+1. Download `DeepSeekMeter-win-x64.zip` from the [Releases page](https://github.com/pppolf/DeepSeekMeter/releases)
+2. Extract anywhere and run `DeepSeekMeter.exe` (no .NET SDK required)
+
 ### Windows (from source)
 
 ```powershell
 dotnet build windows/DeepSeekMeter.sln -c Release
 dotnet run --project windows/src/DeepSeekMeter -c Release
+pwsh Scripts/publish-windows.ps1   # produce windows/publish/DeepSeekMeter-win-x64.zip
 ```
 
 See [`windows/README.md`](windows/README.md) for details.
