@@ -33,10 +33,13 @@ final class StatusItemController: NSObject {
         popover.behavior = .transient // 点击外部自动关闭
         popover.animates = true
 
-        // 状态变化时刷新菜单栏文字/图标
+        // 状态变化时刷新菜单栏文字/图标，并自适应弹窗高度
         model.objectWillChange
             .sink { [weak self] _ in
-                Task { @MainActor in self?.render() }
+                Task { @MainActor in
+                    self?.render()
+                    self?.resizePopoverToFitContent()
+                }
             }
             .store(in: &cancellables)
 
@@ -48,6 +51,15 @@ final class StatusItemController: NSObject {
             popover.performClose(sender)
         } else {
             showPopover()
+        }
+    }
+
+    private func resizePopoverToFitContent() {
+        guard let hosting = popover.contentViewController?.view as? NSHostingView<PopoverView> else { return }
+        hosting.layoutSubtreeIfNeeded()
+        let fitting = hosting.fittingSize
+        if fitting.height > 0 {
+            popover.contentSize = NSSize(width: 340, height: fitting.height)
         }
     }
 

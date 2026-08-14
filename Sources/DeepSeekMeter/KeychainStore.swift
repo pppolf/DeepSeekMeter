@@ -1,13 +1,15 @@
 import Foundation
 import Security
 
-/// 把 API Key 存进 macOS 钥匙串，避免明文落盘
+/// 把敏感凭证存进 macOS 钥匙串，避免明文落盘
 enum KeychainStore {
     private static let service = "com.deepseek.meter"
-    private static let account = "deepseek-api-key"
+
+    static let apiKeyAccount = "deepseek-api-key"
+    static let platformTokenAccount = "deepseek-platform-token"
 
     @discardableResult
-    static func save(_ value: String) -> Bool {
+    static func save(_ value: String, account: String) -> Bool {
         let data = Data(value.utf8)
         let base: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
@@ -21,7 +23,7 @@ enum KeychainStore {
         return SecItemAdd(query as CFDictionary, nil) == errSecSuccess
     }
 
-    static func load() -> String? {
+    static func load(account: String) -> String? {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -35,7 +37,7 @@ enum KeychainStore {
         return String(data: data, encoding: .utf8)
     }
 
-    static func delete() {
+    static func delete(account: String) {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -43,4 +45,12 @@ enum KeychainStore {
         ]
         SecItemDelete(query as CFDictionary)
     }
+
+    // 便捷方法
+    static func saveAPIKey(_ v: String) -> Bool { save(v, account: apiKeyAccount) }
+    static func loadAPIKey() -> String? { load(account: apiKeyAccount) }
+    static func deleteAPIKey() { delete(account: apiKeyAccount) }
+    static func savePlatformToken(_ v: String) -> Bool { save(v, account: platformTokenAccount) }
+    static func loadPlatformToken() -> String? { load(account: platformTokenAccount) }
+    static func deletePlatformToken() { delete(account: platformTokenAccount) }
 }

@@ -2,11 +2,17 @@ import Foundation
 import Combine
 import ServiceManagement
 
-/// 用户设置：API Key（钥匙串）+ 刷新间隔 + 开机自启（UserDefaults）
+/// 用户设置：API Key / 平台 Token（钥匙串）+ 刷新间隔 + 开机自启（UserDefaults）
 @MainActor
 final class SettingsStore: ObservableObject {
     @Published var apiKey: String {
-        didSet { KeychainStore.save(apiKey) }
+        didSet { KeychainStore.saveAPIKey(apiKey) }
+    }
+    @Published var platformToken: String {
+        didSet { KeychainStore.savePlatformToken(platformToken) }
+    }
+    @Published var platformUserName: String {
+        didSet { UserDefaults.standard.set(platformUserName, forKey: Keys.platformUserName) }
     }
     @Published var refreshInterval: TimeInterval {
         didSet {
@@ -26,11 +32,14 @@ final class SettingsStore: ObservableObject {
     private enum Keys {
         static let refreshInterval = "settings.refreshInterval"
         static let launchAtLogin = "settings.launchAtLogin"
+        static let platformUserName = "settings.platformUserName"
     }
 
     init() {
         let defaults = UserDefaults.standard
-        apiKey = KeychainStore.load() ?? ""
+        apiKey = KeychainStore.loadAPIKey() ?? ""
+        platformToken = KeychainStore.loadPlatformToken() ?? ""
+        platformUserName = defaults.string(forKey: Keys.platformUserName) ?? ""
         let saved = defaults.double(forKey: Keys.refreshInterval)
         refreshInterval = saved > 0 ? saved : 60
         launchAtLogin = defaults.bool(forKey: Keys.launchAtLogin)
@@ -39,7 +48,13 @@ final class SettingsStore: ObservableObject {
 
     func clearAPIKey() {
         apiKey = ""
-        KeychainStore.delete()
+        KeychainStore.deleteAPIKey()
+    }
+
+    func clearPlatformToken() {
+        platformToken = ""
+        platformUserName = ""
+        KeychainStore.deletePlatformToken()
     }
 
     private func applyLaunchAtLogin(_ enabled: Bool) {

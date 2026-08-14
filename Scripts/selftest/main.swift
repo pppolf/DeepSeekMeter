@@ -57,6 +57,82 @@ check(currencySymbol("USD") == "$", "USD -> $")
 check(currencySymbol("EUR") == "€", "EUR -> €")
 check(currencySymbol("XXX") == "XXX", "未知币种原样返回")
 
+func XCTUnwrapSafe<T>(_ value: T?) throws -> T {
+    guard let value else { throw NSError(domain: "unwrap", code: 1) }
+    return value
+}
+
+func PopoverViewHelpersCountString(_ n: Int) -> String {
+    let formatter = NumberFormatter()
+    formatter.numberStyle = .decimal
+    return formatter.string(from: NSNumber(value: n)) ?? "\(n)"
+}
+
+// 4. usage/amount 解码（真实返回结构）
+let amountJSON = """
+{"code":0,"msg":"","data":{"biz_code":0,"biz_msg":"","biz_data":{"total":[{"model":"deepseek-v4-pro","usage":[{"type":"PROMPT_TOKEN","amount":"0"},{"type":"PROMPT_CACHE_HIT_TOKEN","amount":"311932800"},{"type":"PROMPT_CACHE_MISS_TOKEN","amount":"1584089"},{"type":"RESPONSE_TOKEN","amount":"950284"},{"type":"REQUEST","amount":"1130"}]}],"days":[{"date":"2026-08-01","data":[{"model":"deepseek-v4-pro","usage":[{"type":"PROMPT_CACHE_HIT_TOKEN","amount":"100"},{"type":"RESPONSE_TOKEN","amount":"50"},{"type":"REQUEST","amount":"2"}]}]}]}}}
+"""
+do {
+    struct AmountBiz: Decodable { let bizData: UsageData }
+    struct AmountResp: Decodable { let code: Int; let data: AmountBiz? }
+    let decoder = JSONDecoder()
+    decoder.keyDecodingStrategy = .convertFromSnakeCase
+    let resp = try decoder.decode(AmountResp.self, from: Data(amountJSON.utf8))
+    check(resp.code == 0, "amount 外层 code")
+    let usage = try XCTUnwrapSafe(resp.data?.bizData)
+    check(usage.total.count == 1, "amount 模型数")
+    let model = usage.total[0]
+    check(model.model == "deepseek-v4-pro", "amount 模型名")
+    check(abs(model.value(for: "PROMPT_CACHE_HIT_TOKEN") - 311932800) < 1, "amount 缓存命中")
+    check(abs(model.value(for: "RESPONSE_TOKEN") - 950284) < 1, "amount 输出 token")
+    check(model.requests == 1130, "amount 请求数")
+    check(usage.days?.count == 1, "amount days")
+    if let day = usage.days?.first {
+        check(day.date == "2026-08-01", "amount 日期")
+        check(day.data[0].requests == 2, "amount 当日请求")
+    }
+} catch {
+    check(false, "amount 解码抛错：\(error)")
+}
+
+// 5. usage/cost 解码（biz_data 是数组）
+let costJSON = """
+{"code":0,"msg":"","data":{"biz_code":0,"biz_msg":"","biz_data":[{"total":[{"model":"deepseek-v4-pro","usage":[{"type":"PROMPT_CACHE_HIT_TOKEN","amount":"7.7983200000000000"},{"type":"PROMPT_CACHE_MISS_TOKEN","amount":"4.7522670000000000"},{"type":"RESPONSE_TOKEN","amount":"5.7017040000000000"}]}],"days":[]}]}}
+"""
+do {
+    struct CostBiz: Decodable { let bizData: [UsageData] }
+    struct CostResp: Decodable { let code: Int; let data: CostBiz? }
+    let decoder = JSONDecoder()
+    decoder.keyDecodingStrategy = .convertFromSnakeCase
+    let resp = try decoder.decode(CostResp.self, from: Data(costJSON.utf8))
+    let data = try XCTUnwrapSafe(resp.data?.bizData.first)
+    let total = data.total[0].usage.reduce(0) { $0 + $1.value }
+    check(abs(total - 18.252291) < 0.001, "cost 费用合计 18.252291")
+} catch {
+    check(false, "cost 解码抛错：\(error)")
+}
+
+// 6. get_user_summary 解码（snake_case）
+let summaryJSON = """
+{"code":0,"msg":"","data":{"biz_code":0,"biz_msg":"","biz_data":{"normal_wallets":[{"currency":"CNY","balance":"40.2492316400000000","token_estimation":"0"}],"bonus_wallets":[{"currency":"CNY","balance":"0","token_estimation":"0"}],"total_costs":[{"currency":"CNY","amount":"19.7507683600000000"}]}}}
+"""
+do {
+    struct SummaryBiz: Decodable { let bizData: UserSummary }
+    struct SummaryResp: Decodable { let code: Int; let data: SummaryBiz? }
+    let decoder = JSONDecoder()
+    decoder.keyDecodingStrategy = .convertFromSnakeCase
+    let resp = try decoder.decode(SummaryResp.self, from: Data(summaryJSON.utf8))
+    let summary = try XCTUnwrapSafe(resp.data?.bizData)
+    check(abs(summary.normalWallets[0].value - 40.24923164) < 0.0001, "summary 余额 40.25")
+    check(abs(summary.totalCosts[0].value - 19.75076836) < 0.0001, "summary 累计消费 19.75")
+} catch {
+    check(false, "summary 解码抛错：\(error)")
+}
+
+// 7. 格式化工具
+check(format(311932800.0) == "311932800.0", "大数格式化")
+check(PopoverViewHelpersCountString(1130) == "1,130", "千分位")
+
 if failures > 0 {
     print("\n❌ \(failures) 项未通过")
     exit(1)

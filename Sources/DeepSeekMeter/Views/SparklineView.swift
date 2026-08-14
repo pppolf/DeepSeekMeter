@@ -71,3 +71,28 @@ struct SparklineView: View {
         }
     }
 }
+
+/// 每日费用柱状图
+struct DailyCostChart: View {
+    let costs: [DailyCost]
+    var currency: String? = nil
+
+    var body: some View {
+        GeometryReader { geo in
+            let maxCost = max(costs.map(\.cost).max() ?? 0, 0.0001)
+            HStack(alignment: .bottom, spacing: 2) {
+                ForEach(costs) { item in
+                    VStack(spacing: 2) {
+                        Spacer(minLength: 0)
+                        RoundedRectangle(cornerRadius: 1.5)
+                            .fill(item.cost > 0 ? Color.accentColor.opacity(0.75) : Color.secondary.opacity(0.1))
+                            .frame(height: max(2, CGFloat(item.cost / maxCost) * (geo.size.height - 8)))
+                        Text(String(Calendar.current.component(.day, from: item.date)))
+                            .font(.system(size: 6))
+                            .foregroundStyle(.tertiary)
+                    }
+                }
+            }
+        }
+    }
+}

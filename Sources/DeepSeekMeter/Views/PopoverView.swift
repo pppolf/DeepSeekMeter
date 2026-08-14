@@ -6,6 +6,8 @@ struct PopoverView: View {
     @ObservedObject var model: AppModel
     @State private var draftKey = ""
     @State private var showingKeyField = false
+    @State private var draftPlatformToken = ""
+    @State private var showingPlatformTokenField = false
 
     private var balance: BalanceInfo? { model.lastBalance }
 
@@ -13,6 +15,7 @@ struct PopoverView: View {
         VStack(spacing: 14) {
             header
             balanceSection
+            usageSection
             trendSection
             if let error = model.lastError {
                 errorBanner(error)
@@ -26,6 +29,8 @@ struct PopoverView: View {
         .onAppear {
             draftKey = model.settings.apiKey
             showingKeyField = model.settings.apiKey.isEmpty
+            draftPlatformToken = model.settings.platformToken
+            showingPlatformTokenField = model.settings.platformToken.isEmpty
         }
     }
 
@@ -112,6 +117,102 @@ struct PopoverView: View {
                 .font(.callout.weight(.medium))
                 .monospacedDigit()
         }
+    }
+
+    // MARK: - 本月用量
+
+    private var usageSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if let usage = model.monthUsage {
+                // 标题
+                HStack(spacing: 6) {
+                    Text("\(usage.year)年\(usage.month)月用量")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Text("累计 ¥\(format(usage.totalCost))")
+                        .font(.caption.weight(.semibold))
+                        .monospacedDigit()
+                }
+                // 今日 / 本月统计
+                HStack(spacing: 10) {
+                    statCell(title: "今日费用", value: "¥\(format(usage.cost(on: Date())))")
+                    let today = usage.tokens(on: Date())
+                    statCell(title: "今日请求", value: Self.countString(today.requests))
+                    statCell(title: "今日输出", value: Self.tokenString(today.response))
+                }
+                HStack(spacing: 10) {
+                    statCell(title: "本月请求", value: Self.countString(usage.totalRequests))
+                    statCell(title: "本月输出", value: Self.tokenString(usage.responseTokens))
+                    statCell(title: "缓存命中", value: Self.tokenString(usage.cacheHitTokens))
+                }
+                // 模型明细
+                ForEach(usage.amountModels.filter { $0.requests > 0 }) { item in
+                    HStack {
+                        Text(Self.modelDisplayName(item.model))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        let cost = usage.costModels.first(where: { $0.model == item.model })?
+                            .usage.reduce(0) { $0 + $1.value } ?? 0
+                        Text("\(Self.countString(item.requests)) 次 · ¥\(format(cost))")
+                            .font(.caption.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                // 每日费用柱状图
+                if !usage.costDays.isEmpty {
+                    DailyCostChart(costs: usage.dailyCosts(days: 14), currency: model.lastBalance?.currency)
+                        .frame(height: 34)
+                    Text("近14天每日费用")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
+            } else if model.usageError != nil {
+                HStack(alignment: .top, spacing: 6) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.orange)
+                    Text(model.usageError ?? "")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 0)
+                }
+            } else if model.isFetching {
+                HStack(spacing: 6) {
+                    ProgressView()
+                        .controlSize(.small)
+                    Text("加载用量…")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                }
+            } else {
+                HStack(spacing: 6) {
+                    Image(systemName: "person.badge.key")
+                        .foregroundStyle(.secondary)
+                    Text("配置平台 Token 后显示用量明细（费用 / Token / 请求）")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Spacer(minLength: 0)
+                }
+            }
+        }
+        .padding(10)
+        .background(Color.secondary.opacity(0.06), in: RoundedRectangle(cornerRadius: 10))
+    }
+
+    private func statCell(title: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title)
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+            Text(value)
+                .font(.callout.weight(.medium))
+                .monospacedDigit()
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     // MARK: - 趋势
@@ -209,6 +310,46 @@ struct PopoverView: View {
                 }
             }
 
+            // 平台 Token（用量鉴权）
+            HStack(spacing: 8) {
+                Text("平台Token")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .frame(width: 58, alignment: .leading)
+                if showingPlatformTokenField {
+                    SecureField("浏览器 userToken", text: $draftPlatformToken)
+                        .textFieldStyle(.roundedBorder)
+                        .font(.caption)
+                        .onSubmit { savePlatformToken() }
+                    Button("保存") { savePlatformToken() }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.small)
+                } else {
+                    if model.settings.platformToken.isEmpty {
+                        Text("未配置")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        Text("已配置 ✓")
+                            .font(.caption)
+                            .foregroundStyle(.green)
+                        if !model.settings.platformUserName.isEmpty {
+                            Text(model.settings.platformUserName)
+                                .font(.caption2)
+                                .foregroundStyle(.tertiary)
+                                .lineLimit(1)
+                        }
+                    }
+                    Spacer()
+                    Button(model.settings.platformToken.isEmpty ? "配置" : "修改") {
+                        draftPlatformToken = model.settings.platformToken
+                        showingPlatformTokenField = true
+                    }
+                    .buttonStyle(.link)
+                    .controlSize(.small)
+                }
+            }
+
             // 刷新间隔
             HStack(spacing: 8) {
                 Text("刷新间隔")
@@ -284,6 +425,33 @@ struct PopoverView: View {
             let ok = await model.saveAPIKey(key)
             if ok { showingKeyField = false }
         }
+    }
+
+    private func savePlatformToken() {
+        let token = draftPlatformToken.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !token.isEmpty else { return }
+        Task { @MainActor in
+            let ok = await model.savePlatformToken(token)
+            if ok { showingPlatformTokenField = false }
+        }
+    }
+
+    // MARK: - 格式化工具
+
+    private static func countString(_ n: Int) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        return formatter.string(from: NSNumber(value: n)) ?? "\(n)"
+    }
+
+    private static func tokenString(_ n: Double) -> String {
+        if n >= 1e8 { return String(format: "%.2f亿", n / 1e8) }
+        if n >= 1e4 { return String(format: "%.1f万", n / 1e4) }
+        return format(n)
+    }
+
+    private static func modelDisplayName(_ model: String) -> String {
+        model.replacingOccurrences(of: "deepseek-", with: "")
     }
 
     // MARK: - 底部
