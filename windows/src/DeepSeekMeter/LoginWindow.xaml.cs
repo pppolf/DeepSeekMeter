@@ -21,6 +21,36 @@ public partial class LoginWindow : Window
     private bool _tokenReceived;
     private string _lastSignature = "";
 
+    /// <summary>WebView2 用户数据目录（退出登录时清理 Cookie/localStorage）。</summary>
+    public static readonly string UserDataFolder = System.IO.Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "DeepSeekMeter", "WebView2");
+
+    /// <summary>清除 WebView2 中与 DeepSeek 相关的登录数据。返回是否成功。</summary>
+    public static bool ClearWebViewData()
+    {
+        try
+        {
+            if (System.IO.Directory.Exists(UserDataFolder))
+                System.IO.Directory.Delete(UserDataFolder, recursive: true);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[DeepSeekMeter] 清除网页登录数据失败：{ex.Message}");
+            return false;
+        }
+    }
+
+    /// <summary>仅允许 DeepSeek 官方域名（*.deepseek.com）内嵌；外部链接交系统浏览器。</summary>
+    private static bool IsDeepSeekDomain(string url)
+    {
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri)) return false;
+        var host = uri.Host;
+        return host.Equals("deepseek.com", StringComparison.OrdinalIgnoreCase) ||
+               host.EndsWith(".deepseek.com", StringComparison.OrdinalIgnoreCase);
+    }
+
     public LoginWindow(Action<string, string> onToken, Action onCancel)
     {
         InitializeComponent();
@@ -35,19 +65,50 @@ public partial class LoginWindow : Window
         try
         {
             // 独立用户数据目录：登录态与浏览器互不影响，重启后仍可用
-            var userDataFolder = System.IO.Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "DeepSeekMeter", "WebView2");
-            var env = await CoreWebView2Environment.CreateAsync(null, userDataFolder);
+            var env = await CoreWebView2Environment.CreateAsync(null, UserDataFolder);
             await WebView.EnsureCoreWebView2Async(env);
             WebView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = false;
             WebView.CoreWebView2.Settings.IsStatusBarEnabled = false;
 
-            // OAuth / 扫码弹窗：在同一 WebView 内导航，保持同一登录态（对齐 macOS 共享 dataStore）
+            // 外部链接（非 *.deepseek.com）交给系统浏览器，不在内嵌页打开
+            WebView.CoreWebView2.NavigationStarting += (_, args) =>
+            {
+                if (IsDeepSeekDomain(args.Uri)) return;
+                args.Cancel = true;
+                try
+                {
+                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                    {
+                        FileName = args.Uri,
+                        UseShellExecute = true,
+                    });
+                }
+                catch (Exception ex)
+                {
+                    SetStatus($"打开外部链接失败：{ex.Message}");
+                }
+            };
+
+            // OAuth / 扫码弹窗：仅官方域名在同一 WebView 内导航（共享登录态）
             WebView.CoreWebView2.NewWindowRequested += (_, args) =>
             {
                 args.Handled = true;
-                WebView.CoreWebView2.Navigate(args.Uri);
+                if (IsDeepSeekDomain(args.Uri))
+                {
+                    WebView.CoreWebView2.Navigate(args.Uri);
+                }
+                else
+                {
+                    try
+                    {
+                        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                        {
+                            FileName = args.Uri,
+                            UseShellExecute = true,
+                        });
+                    }
+                    catch { /* 忽略打开失败 */ }
+                }
             };
             WebView.CoreWebView2.NavigationCompleted += (_, _) => _ = CheckTokenAsync();
 
@@ -91,6 +152,14 @@ public partial class LoginWindow : Window
     private async Task CheckTokenAsync()
     {
         if (_isChecking || _tokenReceived || WebView.CoreWebView2 is null) return;
+
+        // 只在 DeepSeek 官方域名执行 localStorage Token 扫描，避免在第三方页面读取登录数据
+        if (!IsDeepSeekDomain(WebView.CoreWebView2.Source))
+        {
+            SetStatus("请在官方登录页登录…");
+            return;
+        }
+
         _isChecking = true;
         try
         {
