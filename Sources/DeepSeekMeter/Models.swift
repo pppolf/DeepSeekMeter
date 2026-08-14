@@ -133,10 +133,22 @@ struct MonthUsage: Identifiable {
         Self.dayFormatter.string(from: date)
     }
 
+    /// 平台统计口径时区：北京时间（UTC+8）。IANA 标准时区 ID 恒存在，无需回退
+    static let platformTimeZone = TimeZone(identifier: "Asia/Shanghai")!
+
+    /// 平台按北京时间（UTC+8）计日与计月；App 统一用此时区判定「今日/本月」，
+    /// 避免用户本地时区 ≠ UTC+8 时（跨时区旅行等）出现日期错位
+    static let platformCalendar: Calendar = {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = platformTimeZone
+        return calendar
+    }()
+
     static let dayFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd"
         formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = platformTimeZone
         return formatter
     }()
 }

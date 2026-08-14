@@ -89,7 +89,7 @@ pwsh Scripts/publish-windows.ps1    # 生成 windows/publish/DeepSeekMeter-win-x
 
 - 所有数据均来自 DeepSeek 官方平台接口（`get_user_summary` / `usage/amount` / `usage/cost`），使用**你自己的登录态**获取，不会发送到任何第三方
 - Token 只保存在本机 `~/Library/Preferences/com.deepseek.meter.plist`；悬浮窗「退出登录」可随时清除
-- Token 用量数据与控制台可能有数分钟延迟
+- 用量/费用统计**非实时**：当日数据可能延迟数小时甚至次日才更新（余额为实时扣减）
 
 ## 🛠 开发
 

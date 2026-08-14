@@ -148,6 +148,11 @@ struct PopoverView: View {
                     statCell(title: "今日请求", value: Self.countString(today.requests))
                     statCell(title: "今日输出", value: Self.tokenString(today.response))
                 }
+                if usage.cost(on: Date()) == 0 && usage.totalCost > 0 {
+                    Text("当日费用统计可能延迟数小时，余额为实时扣减")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
                 HStack(spacing: 10) {
                     statCell(title: "本月请求", value: Self.countString(usage.totalRequests))
                     statCell(title: "本月输出", value: Self.tokenString(usage.responseTokens))
