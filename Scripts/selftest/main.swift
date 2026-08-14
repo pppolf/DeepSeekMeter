@@ -24,6 +24,7 @@ check(currencySymbol("GBP") == "£", "GBP -> £")
 check(currencySymbol("XXX") == "XXX", "未知币种原样返回")
 
 // 1.5 平台时区对齐：北京时间（UTC+8）计日，与 usage/cost、usage/amount 的 days 口径一致
+// 用例 1：跨日边界——UTC 8/14 16:30 即北京时间 8/15 00:30，必须归入 8/15（本地时区为 UTC 时会错位成 8/14）
 var utcComps = DateComponents()
 utcComps.calendar = Calendar(identifier: .gregorian)
 utcComps.timeZone = TimeZone(identifier: "UTC")

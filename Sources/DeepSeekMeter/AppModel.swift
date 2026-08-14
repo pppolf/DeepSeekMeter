@@ -116,7 +116,9 @@ final class AppModel: ObservableObject {
         }
         do {
             let now = Date()
-            let calendar = MonthUsage.platformCalendar // 与平台统计口径一致（北京时间）
+            // 用平台时区（北京时间）而不是 Calendar.current：用户跨时区旅行时本地时区变化，
+            // 会导致「今日/本月」与平台统计口径错位（今日费用/请求显示 0 或错位）
+            let calendar = MonthUsage.platformCalendar
             let year = calendar.component(.year, from: now)
             let month = calendar.component(.month, from: now)
             async let amountFuture = platformService.fetchUsageAmount(token: settings.platformToken, month: month, year: year)
