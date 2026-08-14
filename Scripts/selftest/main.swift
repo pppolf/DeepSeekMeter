@@ -113,7 +113,9 @@ do {
 }
 
 // 7. 空 data / 空 biz_data
-let emptyDataJSON = """{"code":0,"msg":"","data":null}"""
+let emptyDataJSON = """
+{"code":0,"msg":"","data":null}
+"""
 do {
     struct EmptyBiz: Decodable { let bizData: UsageData? }
     struct EmptyResp: Decodable { let code: Int; let data: EmptyBiz? }
@@ -125,7 +127,9 @@ do {
     check(false, "空 data 解码抛错：\(error)")
 }
 
-let emptyBizDataJSON = """{"code":0,"msg":"","data":{"biz_code":0,"biz_msg":"","biz_data":null}}"""
+let emptyBizDataJSON = """
+{"code":0,"msg":"","data":{"biz_code":0,"biz_msg":"","biz_data":null}}
+"""
 do {
     struct EmptyBiz2: Decodable { let bizData: UsageData? }
     struct EmptyResp2: Decodable { let code: Int; let data: EmptyBiz2? }
