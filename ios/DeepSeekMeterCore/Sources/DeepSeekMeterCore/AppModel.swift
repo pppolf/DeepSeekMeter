@@ -36,8 +36,14 @@ public final class AppModel: ObservableObject {
     /// 可选刷新间隔（秒），对齐 macOS SettingsStore.intervalOptions
     public static let intervalOptions: [TimeInterval] = [15, 30, 60, 300, 600]
 
-    /// 当前刷新间隔（默认 60s，与 macOS 默认一致）
-    public var refreshInterval: TimeInterval = 60
+    /// 当前刷新间隔（默认 60s，与 macOS 默认一致；持久化到 UserDefaults，非法值回退 60）
+    public var refreshInterval: TimeInterval {
+        didSet {
+            UserDefaults.standard.set(refreshInterval, forKey: Self.refreshIntervalKey)
+        }
+    }
+
+    private static let refreshIntervalKey = "settings.refreshInterval"
 
     private var timer: Timer?
 
@@ -45,6 +51,8 @@ public final class AppModel: ObservableObject {
         self.platformService = platformService
         self.tokenStore = tokenStore
         self.token = tokenStore.loadToken()
+        let saved = UserDefaults.standard.double(forKey: Self.refreshIntervalKey)
+        self.refreshInterval = Self.intervalOptions.contains(saved) ? saved : 60
     }
 
     /// 数据可信度状态（未登录/加载中/最新/过期/错误/登录已过期 六态，与桌面版一致）
