@@ -115,22 +115,40 @@ final class AppModel: ObservableObject {
             return
         }
         do {
-            let now = Date()
             // 用平台时区（北京时间）而不是 Calendar.current：用户跨时区旅行时本地时区变化，
             // 会导致「今日/本月」与平台统计口径错位（今日费用/请求显示 0 或错位）
             let calendar = MonthUsage.platformCalendar
-            let year = calendar.component(.year, from: now)
-            let month = calendar.component(.month, from: now)
-            async let amountFuture = platformService.fetchUsageAmount(token: settings.platformToken, month: month, year: year)
-            async let costFuture = platformService.fetchUsageCost(token: settings.platformToken, month: month, year: year)
+            let now = Date()
+            let comps = calendar.dateComponents([.year, .month], from: now)
+            guard let start = calendar.date(from: DateComponents(year: comps.year, month: comps.month, day: 1)),
+                  let end = calendar.date(byAdding: .month, value: 1, to: start) else {
+                // 纯日历计算理论上必然成功，防御性兜底
+                throw PlatformError.api(code: -1, msg: "无法计算本月时间范围")
+            }
+            // 与 MonthUsage.platformCalendar 单一数据源，避免口径漂移
+            let tz = MonthUsage.platformTimeZone.secondsFromGMT()
+            let startTs = Int(start.timeIntervalSince1970)
+            let endTs = Int(end.timeIntervalSince1970)
+            // by_api_key 接口实时返回当日数据（usage/amount、usage/cost 有数小时～次日延迟）
+            async let amountFuture = platformService.fetchAPIKeyAmount(
+                token: settings.platformToken,
+                start: startTs,
+                end: endTs,
+                tz: tz
+            )
+            async let costFuture = platformService.fetchAPIKeyCost(
+                token: settings.platformToken,
+                start: startTs,
+                end: endTs,
+                tz: tz
+            )
             let (amountData, costData) = try await (amountFuture, costFuture)
-            monthUsage = MonthUsage(
-                year: year,
-                month: month,
-                amountModels: amountData.total,
-                costModels: costData.total,
-                costDays: costData.days ?? [],
-                amountDays: amountData.days ?? []
+            monthUsage = MonthUsage.aggregated(
+                startTs: startTs,
+                endTs: endTs,
+                tzSeconds: tz,
+                amountData: amountData,
+                costData: costData
             )
             usageError = nil
             platformTokenExpired = false
