@@ -42,13 +42,28 @@ public partial class LoginWindow : Window
         }
     }
 
-    /// <summary>仅允许 DeepSeek 官方域名（*.deepseek.com）内嵌；外部链接交系统浏览器。</summary>
-    private static bool IsDeepSeekDomain(string url)
+    /// <summary>打开外部链接：仅允许 https；拒绝 file:/javascript:/data:/ms-settings:/shell: 等危险协议。</summary>
+    private void OpenExternalUrl(string url)
     {
-        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri)) return false;
-        var host = uri.Host;
-        return host.Equals("deepseek.com", StringComparison.OrdinalIgnoreCase) ||
-               host.EndsWith(".deepseek.com", StringComparison.OrdinalIgnoreCase);
+        if (UrlSafety.IsAllowedExternalUrl(url))
+        {
+            try
+            {
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = url,
+                    UseShellExecute = true,
+                });
+            }
+            catch
+            {
+                SetStatus("打开外部链接失败");
+            }
+        }
+        else
+        {
+            SetStatus("已阻止不安全的链接");
+        }
     }
 
     public LoginWindow(Action<string, string> onToken, Action onCancel)
@@ -70,44 +85,25 @@ public partial class LoginWindow : Window
             WebView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = false;
             WebView.CoreWebView2.Settings.IsStatusBarEnabled = false;
 
-            // 外部链接（非 *.deepseek.com）交给系统浏览器，不在内嵌页打开
+            // 外部链接（非 *.deepseek.com）交给系统浏览器（仅 https）；危险协议直接拒绝
             WebView.CoreWebView2.NavigationStarting += (_, args) =>
             {
-                if (IsDeepSeekDomain(args.Uri)) return;
+                if (UrlSafety.IsAllowedDeepSeekUrl(args.Uri)) return;
                 args.Cancel = true;
-                try
-                {
-                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-                    {
-                        FileName = args.Uri,
-                        UseShellExecute = true,
-                    });
-                }
-                catch (Exception ex)
-                {
-                    SetStatus($"打开外部链接失败：{ex.Message}");
-                }
+                OpenExternalUrl(args.Uri);
             };
 
             // OAuth / 扫码弹窗：仅官方域名在同一 WebView 内导航（共享登录态）
             WebView.CoreWebView2.NewWindowRequested += (_, args) =>
             {
                 args.Handled = true;
-                if (IsDeepSeekDomain(args.Uri))
+                if (UrlSafety.IsAllowedDeepSeekUrl(args.Uri))
                 {
                     WebView.CoreWebView2.Navigate(args.Uri);
                 }
                 else
                 {
-                    try
-                    {
-                        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-                        {
-                            FileName = args.Uri,
-                            UseShellExecute = true,
-                        });
-                    }
-                    catch { /* 忽略打开失败 */ }
+                    OpenExternalUrl(args.Uri);
                 }
             };
             WebView.CoreWebView2.NavigationCompleted += (_, _) => _ = CheckTokenAsync();
@@ -153,8 +149,8 @@ public partial class LoginWindow : Window
     {
         if (_isChecking || _tokenReceived || WebView.CoreWebView2 is null) return;
 
-        // 只在 DeepSeek 官方域名执行 localStorage Token 扫描，避免在第三方页面读取登录数据
-        if (!IsDeepSeekDomain(WebView.CoreWebView2.Source))
+        // 只在验证通过的 DeepSeek HTTPS 页面执行 localStorage Token 扫描，避免在第三方页面读取登录数据
+        if (!UrlSafety.IsAllowedDeepSeekUrl(WebView.CoreWebView2.Source))
         {
             SetStatus("请在官方登录页登录…");
             return;

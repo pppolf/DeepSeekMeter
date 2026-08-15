@@ -1,11 +1,13 @@
 using System.Windows;
+using System.Windows.Input;
 using System.Windows.Media;
+using DeepSeekMeter.Core;
 
 namespace DeepSeekMeter;
 
 /// <summary>
 /// 本月按天 Token 用量柱状图（对齐 macOS 版 SparklineView.swift）。
-/// 每天一根柱子 + 日期标签，空值日显示浅色占位。
+/// 每天一根柱子 + 日期标签，空值日显示浅色占位；悬停显示完整千分位数值。
 /// </summary>
 public sealed class SparklineControl : System.Windows.FrameworkElement
 {
@@ -23,6 +25,20 @@ public sealed class SparklineControl : System.Windows.FrameworkElement
     {
         get => (IReadOnlyList<Entry>)GetValue(EntriesProperty);
         set => SetValue(EntriesProperty, value);
+    }
+
+    /// <summary>当前趋势指标名（输出/缓存命中/总量），用于悬停提示。</summary>
+    public static readonly DependencyProperty MetricNameProperty =
+        DependencyProperty.Register(
+            nameof(MetricName),
+            typeof(string),
+            typeof(SparklineControl),
+            new PropertyMetadata("Token"));
+
+    public string MetricName
+    {
+        get => (string)GetValue(MetricNameProperty);
+        set => SetValue(MetricNameProperty, value);
     }
 
     protected override void OnRender(DrawingContext dc)
@@ -82,5 +98,33 @@ public sealed class SparklineControl : System.Windows.FrameworkElement
             double textX = x + barWidth / 2 - text.Width / 2; // 柱子中心对齐
             dc.DrawText(text, new Point(textX, chartHeight));
         }
+    }
+
+    // MARK: - 悬停详情（覆盖该日完整槽位，无需精确指向窄柱）
+
+    protected override void OnMouseMove(MouseEventArgs e)
+    {
+        base.OnMouseMove(e);
+        var entries = Entries;
+        if (entries is null || entries.Count == 0 || ActualWidth <= 0)
+        {
+            ToolTip = null;
+            return;
+        }
+        double slot = ActualWidth / entries.Count;
+        int index = (int)(e.GetPosition(this).X / slot);
+        if (index < 0 || index >= entries.Count)
+        {
+            ToolTip = null;
+            return;
+        }
+        var entry = entries[index];
+        ToolTip = $"{entry.Date.Month}月{entry.Date.Day}日\n{MetricName}\n{Formatting.TokenFullString(entry.Value)} Token";
+    }
+
+    protected override void OnMouseLeave(MouseEventArgs e)
+    {
+        base.OnMouseLeave(e);
+        ToolTip = null;
     }
 }

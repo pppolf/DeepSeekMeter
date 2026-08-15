@@ -76,6 +76,8 @@ pwsh Scripts/publish-windows.ps1    # 生成 windows/publish/DeepSeekMeter-win-x
 
 详见 [windows/README.md](windows/README.md)。
 
+> Windows 端鲸鱼娘金钱主题图标由 AI 为本项目生成，并非 DeepSeek 官方图标或官方角色素材；DeepSeek 相关名称、商标及官方品牌资产归其权利人所有（详见 [windows/assets/ATTRIBUTION.md](windows/assets/ATTRIBUTION.md)）。
+
 ## 🚀 快速开始
 
 1. 启动应用，菜单栏出现 🐳 图标
