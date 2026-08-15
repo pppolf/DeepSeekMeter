@@ -115,22 +115,32 @@ final class AppModel: ObservableObject {
             return
         }
         do {
-            let now = Date()
             // 用平台时区（北京时间）而不是 Calendar.current：用户跨时区旅行时本地时区变化，
             // 会导致「今日/本月」与平台统计口径错位（今日费用/请求显示 0 或错位）
             let calendar = MonthUsage.platformCalendar
-            let year = calendar.component(.year, from: now)
-            let month = calendar.component(.month, from: now)
-            async let amountFuture = platformService.fetchUsageAmount(token: settings.platformToken, month: month, year: year)
-            async let costFuture = platformService.fetchUsageCost(token: settings.platformToken, month: month, year: year)
+            let now = Date()
+            let comps = calendar.dateComponents([.year, .month], from: now)
+            guard let start = calendar.date(from: DateComponents(year: comps.year, month: comps.month, day: 1)),
+                  let end = calendar.date(byAdding: .month, value: 1, to: start) else { return }
+            let tz = 8 * 3600 // UTC+8（北京时间），与平台计日口径一致
+            // by_api_key 接口实时返回当日数据（usage/amount、usage/cost 有数小时～次日延迟）
+            async let amountFuture = platformService.fetchAPIKeyAmount(
+                token: settings.platformToken,
+                start: Int(start.timeIntervalSince1970),
+                end: Int(end.timeIntervalSince1970),
+                tz: tz
+            )
+            async let costFuture = platformService.fetchAPIKeyCost(
+                token: settings.platformToken,
+                start: Int(start.timeIntervalSince1970),
+                end: Int(end.timeIntervalSince1970),
+                tz: tz
+            )
             let (amountData, costData) = try await (amountFuture, costFuture)
-            monthUsage = MonthUsage(
-                year: year,
-                month: month,
-                amountModels: amountData.total,
-                costModels: costData.total,
-                costDays: costData.days ?? [],
-                amountDays: amountData.days ?? []
+            monthUsage = MonthUsage.aggregated(
+                startTs: Int(start.timeIntervalSince1970),
+                amountData: amountData,
+                costData: costData
             )
             usageError = nil
             platformTokenExpired = false

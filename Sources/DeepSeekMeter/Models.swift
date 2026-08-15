@@ -61,6 +61,64 @@ struct UsageDay: Decodable, Identifiable {
     var id: String { date }
 }
 
+// MARK: - by_api_key 用量（实时接口：usage/by_api_key/amount、usage/by_api_key/cost）
+// 参数 start/end 为 Unix 秒，tz 为秒偏移（UTC+8 = 28800），bucket 传 86400 按天分桶；
+// 与 usage/amount、usage/cost（延迟数小时～次日）不同，该接口数据实时
+
+/// usage/by_api_key/amount 的 biz_data
+struct APIKeyAmountData: Decodable {
+    let start: Int
+    let end: Int
+    let bucket: Int
+    let models: [String]
+    let series: [APIKeyAmountSeries]
+}
+
+struct APIKeyAmountSeries: Decodable {
+    let apiKey: APIKeyInfo
+    let model: String
+    let buckets: [APIKeyUsageBucket]
+}
+
+/// usage/by_api_key/cost 的 biz_data
+struct APIKeyCostData: Decodable {
+    let start: Int
+    let end: Int
+    let bucket: Int
+    let models: [String]
+    let data: [APIKeyCostGroup]
+}
+
+struct APIKeyCostGroup: Decodable {
+    let currency: String
+    let series: [APIKeyCostSeries]
+}
+
+struct APIKeyCostSeries: Decodable {
+    let apiKey: APIKeyInfo
+    let model: String
+    let buckets: [APIKeyCostBucket]
+}
+
+struct APIKeyInfo: Decodable {
+    let trackingId: String
+    let name: String
+    let sensitiveId: String
+    let valid: Bool
+}
+
+/// 按天桶的 token 用量：type -> amount（REQUEST / RESPONSE_TOKEN / PROMPT_CACHE_HIT_TOKEN / PROMPT_CACHE_MISS_TOKEN）
+struct APIKeyUsageBucket: Decodable {
+    let time: Int
+    let usage: [String: String]
+}
+
+/// 按天桶的费用
+struct APIKeyCostBucket: Decodable {
+    let time: Int
+    let cost: String
+}
+
 /// get_user_summary 的 biz_data
 struct UserSummary: Decodable {
     let normalWallets: [WalletBalance]
@@ -152,6 +210,80 @@ struct MonthUsage: Identifiable {
         formatter.timeZone = platformTimeZone
         return formatter
     }()
+
+    // MARK: - by_api_key 序列聚合
+
+    /// 把 by_api_key 的天桶序列聚合成 MonthUsage（日期按北京时间归属，与 startTs 所在时区一致）
+    /// amountData 提供 token/请求，costData 提供费用（无费用数据时传 nil）
+    static func aggregated(
+        startTs: Int,
+        amountData: APIKeyAmountData?,
+        costData: APIKeyCostData?
+    ) -> MonthUsage {
+        let startDate = Date(timeIntervalSince1970: Double(startTs))
+        let calendar = platformCalendar
+        let year = calendar.component(.year, from: startDate)
+        let month = calendar.component(.month, from: startDate)
+
+        // 1. token/请求：按 (天, 模型) 与 (模型) 聚合
+        var amountByDayModel: [String: [String: Double]] = [:]
+        var amountByModel: [String: [String: Double]] = [:]
+        for series in amountData?.series ?? [] {
+            for bucket in series.buckets {
+                let day = dayFormatter.string(from: Date(timeIntervalSince1970: Double(bucket.time)))
+                for (type, amount) in bucket.usage {
+                    let value = Double(amount) ?? 0
+                    amountByDayModel["\(day)|\(series.model)", default: [:]][type, default: 0] += value
+                    amountByModel[series.model, default: [:]][type, default: 0] += value
+                }
+            }
+        }
+
+        // 2. 费用：按 (天, 模型) 与 (模型) 聚合（统一记为 COST 类型）
+        var costByDayModel: [String: Double] = [:]
+        var costByModel: [String: Double] = [:]
+        for group in costData?.data ?? [] {
+            for series in group.series {
+                for bucket in series.buckets {
+                    let day = dayFormatter.string(from: Date(timeIntervalSince1970: Double(bucket.time)))
+                    let value = Double(bucket.cost) ?? 0
+                    costByDayModel["\(day)|\(series.model)", default: 0] += value
+                    costByModel[series.model, default: 0] += value
+                }
+            }
+        }
+
+        // 3. 组装（key 与 model 均排序，保证输出稳定）
+        let sortedKeys = amountByDayModel.keys.sorted()
+        let amountDays = sortedKeys.map { key -> UsageDay in
+            let parts = key.split(separator: "|")
+            let usages = amountByDayModel[key]!.sorted { $0.key < $1.key }
+                .map { UsageItem(type: $0.key, amount: String($0.value)) }
+            return UsageDay(date: String(parts[0]), data: [ModelUsage(model: String(parts[1]), usage: usages)])
+        }
+        let amountModels = amountByModel.keys.sorted().map { model in
+            ModelUsage(model: model, usage: amountByModel[model]!.sorted { $0.key < $1.key }
+                .map { UsageItem(type: $0.key, amount: String($0.value)) })
+        }
+
+        let costDayKeys = costByDayModel.keys.sorted()
+        let costDays = costDayKeys.map { key -> UsageDay in
+            let parts = key.split(separator: "|")
+            return UsageDay(date: String(parts[0]), data: [ModelUsage(model: String(parts[1]), usage: [UsageItem(type: "COST", amount: String(costByDayModel[key]!))])])
+        }
+        let costModels = costByModel.keys.sorted().map { model in
+            ModelUsage(model: model, usage: [UsageItem(type: "COST", amount: String(costByModel[model]!))])
+        }
+
+        return MonthUsage(
+            year: year,
+            month: month,
+            amountModels: amountModels,
+            costModels: costModels,
+            costDays: costDays,
+            amountDays: amountDays
+        )
+    }
 }
 
 // MARK: - 数据可信度状态（托盘/悬浮窗/错误提示共用，保证一致）

@@ -176,6 +176,49 @@ do {
     check(false, "空钱包解码抛错：\(error)")
 }
 
+// 10. by_api_key 实时接口：解码 + 聚合（start/end 为 Unix 秒，tz=28800，bucket=86400 按天）
+// 时间戳：1785513600 = 北京 8/1 00:00，1785600000 = 北京 8/2 00:00
+let byKeyAmountJSON = """
+{"code":0,"msg":"","data":{"biz_code":0,"biz_msg":"","biz_data":{"start":1785513600,"end":1788192000,"bucket":86400,"models":["deepseek-v4-pro"],"series":[{"api_key":{"tracking_id":"t1","name":"github","sensitive_id":"sk-xxx","valid":true},"model":"deepseek-v4-pro","buckets":[{"time":1785513600,"usage":{"REQUEST":"2","RESPONSE_TOKEN":"100"}},{"time":1785600000,"usage":{"REQUEST":"5","RESPONSE_TOKEN":"200"}}]}]}}}
+"""
+let byKeyCostJSON = """
+{"code":0,"msg":"","data":{"biz_code":0,"biz_msg":"","biz_data":{"start":1785513600,"end":1788192000,"bucket":86400,"models":["deepseek-v4-pro"],"data":[{"currency":"CNY","series":[{"api_key":{"tracking_id":"t1","name":"github","sensitive_id":"sk-xxx","valid":true},"model":"deepseek-v4-pro","buckets":[{"time":1785513600,"cost":"1.5"},{"time":1785600000,"cost":"2.5"}]}]}]}}}
+"""
+do {
+    struct AKBiz: Decodable { let bizCode: Int; let bizMsg: String; let bizData: APIKeyAmountData }
+    struct AKResp: Decodable { let code: Int; let data: AKBiz? }
+    let decoder = JSONDecoder()
+    decoder.keyDecodingStrategy = .convertFromSnakeCase
+    let amountResp = try decoder.decode(AKResp.self, from: Data(byKeyAmountJSON.utf8))
+    let amountData = amountResp.data?.bizData
+    check(amountData?.series.count == 1, "by_api_key amount series 数")
+    check(amountData?.series.first?.buckets.count == 2, "by_api_key amount 桶数")
+    check(amountData?.series.first?.apiKey.name == "github", "by_api_key api_key 元信息")
+
+    struct CKBiz: Decodable { let bizCode: Int; let bizMsg: String; let bizData: APIKeyCostData }
+    struct CKResp: Decodable { let code: Int; let data: CKBiz? }
+    let costResp = try decoder.decode(CKResp.self, from: Data(byKeyCostJSON.utf8))
+    let costData = costResp.data?.bizData
+    check(costData?.data.first?.currency == "CNY", "by_api_key cost 币种")
+
+    // 聚合：按天 + 按模型
+    let usage = MonthUsage.aggregated(startTs: 1785513600, amountData: amountData, costData: costData)
+    check(usage.year == 2026 && usage.month == 8, "聚合年月（北京时间）")
+    check(usage.amountDays.count == 2, "聚合 amount 天数")
+    check(usage.amountDays.first?.date == "2026-08-01", "聚合 amount 首日")
+    check(usage.amountDays.last?.date == "2026-08-02", "聚合 amount 末日")
+    check(usage.amountModels.first?.requests == 7, "聚合本月请求 2+5")
+    check(abs((usage.amountModels.first?.value(for: "RESPONSE_TOKEN") ?? 0) - 300) < 0.001, "聚合本月输出 100+200")
+    check(usage.costDays.count == 2, "聚合 cost 天数")
+    check(abs(usage.cost(on: Date(timeIntervalSince1970: 1785513600)) - 1.5) < 0.001, "聚合 8/1 费用 1.5")
+    check(abs(usage.totalCost - 4.0) < 0.001, "聚合本月费用 1.5+2.5")
+    // 空数据聚合不崩溃
+    let emptyUsage = MonthUsage.aggregated(startTs: 1785513600, amountData: nil, costData: nil)
+    check(emptyUsage.amountDays.isEmpty && emptyUsage.totalCost == 0, "空数据聚合为 0")
+} catch {
+    check(false, "by_api_key 解码抛错：\(error)")
+}
+
 if failures > 0 {
     print("\n❌ \(failures) 项未通过")
     exit(1)
