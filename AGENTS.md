@@ -59,7 +59,8 @@ windows/                         Windows 版（.NET 8 + WPF，与 macOS 版功�
 ios/                             iOS 版（开发中，详见 MOBILE-PLAN.md）
   DeepSeekMeterCore/             共享核心 Swift Package（PlatformService / Models / Formatting / TokenStoring / AppModel，零第三方依赖；AppModel 注入 TokenStoring+URLSession，可在 macOS 上自测）
   DeepSeekMeter.xcodeproj        iOS App 工程（SwiftUI，Xcode 16 同步文件夹格式）
-  DeepSeekMeter/                 iOS App 源码（AppMain / TokenStore(Keychain) / Views/）
+  DeepSeekMeter/                 iOS App 源码（AppMain / TokenStore(Keychain) / Views/ / NotificationService / BackgroundRefreshService）
+  DeepSeekMeterWidget/            WidgetKit 余额小组件（快照驱动；Token 不进 App Group 共享容器）
   DeepSeekMeterCore/Sources/DeepSeekMeterCoreSelftest/  核心轻量自测（swift run 直接跑，不依赖 XCTest）
 Scripts/
   build-app.sh / install.sh / notarize.sh / run-tests.sh / run-ios-tests.sh / make-icon.sh / generate-icon.swift
@@ -140,7 +141,7 @@ Foundation / AppKit / SwiftUI / WebKit
 ### 移动端红线（iOS / Android，追加条款）
 
 11. **移动端同样零第三方依赖**：iOS/Android 业务逻辑零第三方依赖；系统框架（URLSession / SwiftUI / WebKit / Security / WidgetKit，以及 Android 的 Compose / HttpURLConnection 等）与平台官方工具不视为第三方（与 Windows 版 WebView2 例外同理）
-12. **Token 存储分平台**：红线第 2 条仅适用于 macOS（ad-hoc 签名下钥匙串每次启动弹密码授权）；**iOS 用 Keychain（kSecClassGenericPassword）、Android 用 Keystore 加密后存 SharedPreferences**——移动端 App 有正式签名，钥匙串不会弹窗；同样不得把真实 Token 写进代码/日志/截图
+12. **Token 存储分平台**：红线第 2 条仅适用于 macOS（ad-hoc 签名下钥匙串每次启动弹密码授权）；**iOS 用 Keychain（kSecClassGenericPassword）、Android 用 Keystore 加密后存 SharedPreferences**——移动端 App 有正式签名，钥匙串不会弹窗；同样不得把真实 Token 写进代码/日志/截图。**小组件快照**（App Group UserDefaults）只放余额等非敏感展示数据，不放 Token
 13. **移动端核心逻辑统一在 `ios/DeepSeekMeterCore`**（Swift 5 语言模式，与 Sources/DeepSeekMeter/ 逐文件对应，防三端漂移）；改动后必须跑核心自测（第 2 节命令）；`.xcodeproj` 只允许存在于 `ios/` 内，macOS 包保持无 Xcode 工程；新接口改动前先抓真实响应验证并同步更新自测样例 JSON（红线 4 同样适用于移动端）
 
 ## 9. 完成标准（Definition of Done）

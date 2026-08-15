@@ -2,7 +2,7 @@
 
 DeepSeekMeter 的 **iOS 版**（开发中）：在 iPhone 上实时查看 DeepSeek 账户余额、消费与 Token 用量——与 [macOS 版](../README.zh-CN.md) 和 [Windows 版](../windows/README.md) 功能对齐，使用同一套平台接口契约。
 
-> 总体规划（里程碑、决策点、红线适配）见 [MOBILE-PLAN.md](../MOBILE-PLAN.md)。当前进度：M1 骨架 ✅ / M2 核心包 + 自测 ✅（80 项断言全绿）/ M3 App 主体代码 ✅ / M4 打磨代码 ✅（BGAppRefreshTask、App 图标、OAuth 弹窗内嵌）/ M5 部分 ✅（余额低阈值本地通知；WidgetKit 待工程验证后追加）。App 层待真机与 CI 验证；TestFlight 待开发者账号。
+> 总体规划（里程碑、决策点、红线适配）见 [MOBILE-PLAN.md](../MOBILE-PLAN.md)。当前进度：M1 骨架 ✅ / M2 核心包 + 自测 ✅（82 项断言全绿）/ M3 App 主体代码 ✅ / M4 打磨代码 ✅（BGAppRefreshTask、App 图标、OAuth 弹窗内嵌）/ M5 ✅（余额低阈值本地通知 + WidgetKit 余额小组件）。App 层待真机与 CI 验证；TestFlight 待开发者账号。
 
 ## ✨ 目标功能
 
@@ -30,6 +30,9 @@ ios/
     TokenStore.swift              Keychain 实现 TokenStoring
     BackgroundRefreshService.swift BGAppRefreshTask 调度与处理
     NotificationService.swift       余额低阈值本地通知（纯本地，无推送）
+  DeepSeekMeterWidget/             WidgetKit 余额小组件扩展（快照驱动，不共享 Token）
+  DeepSeekMeter.entitlements       App Group（group.com.deepseek.meter），小组件读快照用
+  DeepSeekMeterWidgetInfo.plist    小组件扩展 Info.plist（NSExtensionPointIdentifier=com.apple.widgetkit-extension）
     Views/                        概览 / 用量 / 趋势（Swift Charts）/ 设置 / 登录（WKWebView + 弹窗内嵌）
     Assets.xcassets               AppIcon（1024，鲸鱼娘深蓝底扁平化）
   DeepSeekMeter.xcodeproj         Xcode 工程（本地包依赖 DeepSeekMeterCore）
@@ -54,9 +57,11 @@ xcodebuild -project ios/DeepSeekMeter.xcodeproj -scheme DeepSeekMeter \
   CODE_SIGNING_ALLOWED=NO build
 ```
 
-## ⚠️ M4 已知限制
+## ⚠️ M5 已知限制
 
 - 后台刷新使用 BGAppRefreshTask（系统调度、尽力而为、**不保证触发**）；可靠路径是前台刷新（进入即刷 + 下拉刷新 + 前台定时器）。
+- 小组件展示**最近一次刷新到的余额快照**（App 刷新后更新，非实时）；Token 不进 App Group 共享容器。
+- 真机测试小组件前需在 Xcode「Signing & Capabilities」为 App 与扩展启用 App Group（需要 Team）；CI 无签名构建不受影响。
 - TestFlight / App Store 分发需要 Apple Developer Program 账号（MOBILE-PLAN.md 决策点 D1）。
 
 ## 🔒 隐私

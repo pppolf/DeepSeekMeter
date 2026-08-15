@@ -2,7 +2,7 @@
 
 The **iOS version** of DeepSeekMeter (in development): view your DeepSeek account balance, spending and token usage on your iPhone — feature-aligned with the [macOS](../README.md) and [Windows](../windows/README.md) versions, using the same platform API contract.
 
-> 总体规划（里程碑、决策点、红线适配）见 [MOBILE-PLAN.md](../MOBILE-PLAN.md)。当前进度：M1 骨架 ✅ / M2 核心包 + 自测 ✅（80 项断言全绿）/ M3 App 主体代码 ✅ / M4 打磨代码 ✅（BGAppRefreshTask、App 图标、OAuth 弹窗内嵌）/ M5 部分 ✅（余额低阈值本地通知；WidgetKit 待工程验证后追加）。App 层待真机与 CI 验证；TestFlight 待开发者账号。
+> 总体规划（里程碑、决策点、红线适配）见 [MOBILE-PLAN.md](../MOBILE-PLAN.md)。当前进度：M1 骨架 ✅ / M2 核心包 + 自测 ✅（82 项断言全绿）/ M3 App 主体代码 ✅ / M4 打磨代码 ✅（BGAppRefreshTask、App 图标、OAuth 弹窗内嵌）/ M5 ✅（余额低阈值本地通知 + WidgetKit 余额小组件）。App 层待真机与 CI 验证；TestFlight 待开发者账号。
 
 ## ✨ Features (target)
 
@@ -30,6 +30,9 @@ ios/
     TokenStore.swift               Keychain-backed TokenStoring
     BackgroundRefreshService.swift BGAppRefreshTask scheduling + handler
     NotificationService.swift       Low-balance local notification (pure local, no push)
+  DeepSeekMeterWidget/             WidgetKit balance widget extension (snapshot-driven, no token sharing)
+  DeepSeekMeter.entitlements       App Group (group.com.deepseek.meter) for widget snapshot
+  DeepSeekMeterWidgetInfo.plist    Widget extension Info.plist (NSExtensionPointIdentifier=com.apple.widgetkit-extension)
     Views/                         Overview / Usage / Trend (Swift Charts) / Settings / Login (WKWebView + in-app OAuth popups)
     Assets.xcassets                AppIcon (1024, whale-girl flattened on deep-blue background)
   DeepSeekMeter.xcodeproj          Xcode project (local package dependency on DeepSeekMeterCore)
@@ -54,9 +57,11 @@ xcodebuild -project ios/DeepSeekMeter.xcodeproj -scheme DeepSeekMeter \
   CODE_SIGNING_ALLOWED=NO build
 ```
 
-## ⚠️ Known limitations (M4)
+## ⚠️ Known limitations (M5)
 
 - Background refresh uses `BGAppRefreshTask` (system-scheduled, best-effort — not guaranteed). The reliable paths are foreground refresh (on open, pull-to-refresh, foreground timer).
+- The widget shows the **last refreshed balance snapshot**; it updates when the app refreshes (not live). The token never enters the shared App Group container.
+- App Group capability must be enabled in Xcode (Signing & Capabilities) with a team before on-device widget testing; CI builds with `CODE_SIGNING_ALLOWED=NO` are unaffected.
 - TestFlight / App Store distribution requires an Apple Developer Program account (decision point D1 in MOBILE-PLAN.md).
 
 ## 🔒 Privacy
