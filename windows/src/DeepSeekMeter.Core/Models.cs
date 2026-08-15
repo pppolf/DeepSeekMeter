@@ -138,11 +138,12 @@ public sealed class ApiKeyInfo
     [JsonPropertyName("valid")] public bool Valid { get; set; }
 }
 
-/// <summary>按天桶的 token 用量：type -> amount（REQUEST / RESPONSE_TOKEN / PROMPT_CACHE_HIT_TOKEN / PROMPT_CACHE_MISS_TOKEN）。</summary>
+/// <summary>按天桶的 token 用量：type -> 数值（REQUEST / RESPONSE_TOKEN / PROMPT_CACHE_HIT_TOKEN / PROMPT_CACHE_MISS_TOKEN）。
+/// 注意：真实响应中值为 JSON 数字（非字符串），必须用 double 解码。</summary>
 public sealed class ApiKeyUsageBucket
 {
     [JsonPropertyName("time")] public long Time { get; set; }
-    [JsonPropertyName("usage")] public Dictionary<string, string> Usage { get; set; } = [];
+    [JsonPropertyName("usage")] public Dictionary<string, double> Usage { get; set; } = [];
 }
 
 /// <summary>按天桶的费用。</summary>
@@ -278,7 +279,7 @@ public sealed class MonthUsage
                 var day = DayString(bucket.Time);
                 foreach (var kv in bucket.Usage)
                 {
-                    var value = double.TryParse(kv.Value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var d) ? d : 0;
+                    var value = kv.Value; // 已按 double 解码
                     if (!amountByDay.TryGetValue(day, out var byModel))
                     {
                         byModel = new Dictionary<string, Dictionary<string, double>>();

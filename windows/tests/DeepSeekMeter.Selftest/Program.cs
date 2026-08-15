@@ -408,7 +408,7 @@ Check(!UrlSafety.IsAllowedExternalUrl("ms-settings:x"), "外链 ms-settings 拒�
 // 16. by_api_key 实时接口：解码 + 聚合（start/end 为 Unix 秒，tz=28800，bucket=86400 按天）
 // 时间戳：1785513600 = 北京 8/1 00:00，1785600000 = 北京 8/2 00:00
 var byKeyAmountJson = """
-{"code":0,"msg":"","data":{"biz_code":0,"biz_msg":"","biz_data":{"start":1785513600,"end":1788192000,"bucket":86400,"models":["deepseek-v4-pro"],"series":[{"api_key":{"tracking_id":"test-tracking","name":"test-key","sensitive_id":"sk-xxx","valid":true},"model":"deepseek-v4-pro","buckets":[{"time":1785513600,"usage":{"REQUEST":"2","RESPONSE_TOKEN":"100"}},{"time":1785600000,"usage":{"REQUEST":"5","RESPONSE_TOKEN":"200"}}]}]}}}
+{"code":0,"msg":"","data":{"biz_code":0,"biz_msg":"","biz_data":{"start":1785513600,"end":1788192000,"bucket":86400,"models":["deepseek-v4-pro"],"series":[{"api_key":{"tracking_id":"test-tracking","name":"test-key","sensitive_id":"sk-xxx","valid":true},"model":"deepseek-v4-pro","buckets":[{"time":1785513600,"usage":{"REQUEST":2,"RESPONSE_TOKEN":100}},{"time":1785600000,"usage":{"REQUEST":5,"RESPONSE_TOKEN":200}}]}]}}}
 """;
 var byKeyCostJson = """
 {"code":0,"msg":"","data":{"biz_code":0,"biz_msg":"","biz_data":{"start":1785513600,"end":1788192000,"bucket":86400,"models":["deepseek-v4-pro"],"data":[{"currency":"CNY","series":[{"api_key":{"tracking_id":"test-tracking","name":"test-key","sensitive_id":"sk-xxx","valid":true},"model":"deepseek-v4-pro","buckets":[{"time":1785513600,"cost":"1.5"},{"time":1785600000,"cost":"2.5"}]}]}]}}}
@@ -442,7 +442,7 @@ try
 
     // 边界：窗口外（下月）桶被忽略；窗口内 8/31 桶计入
     var monthEdgeJson = """
-{"code":0,"msg":"","data":{"biz_code":0,"biz_msg":"","biz_data":{"start":1785513600,"end":1788192000,"bucket":86400,"models":["deepseek-v4-pro"],"series":[{"api_key":{"tracking_id":"test-tracking","name":"test-key","sensitive_id":"sk-xxx","valid":true},"model":"deepseek-v4-pro","buckets":[{"time":1788105600,"usage":{"REQUEST":"3"}},{"time":1788192000,"usage":{"REQUEST":"99"}}]}]}}}
+{"code":0,"msg":"","data":{"biz_code":0,"biz_msg":"","biz_data":{"start":1785513600,"end":1788192000,"bucket":86400,"models":["deepseek-v4-pro"],"series":[{"api_key":{"tracking_id":"test-tracking","name":"test-key","sensitive_id":"sk-xxx","valid":true},"model":"deepseek-v4-pro","buckets":[{"time":1788105600,"usage":{"REQUEST":3}},{"time":1788192000,"usage":{"REQUEST":99}}]}]}}}
 """;
     var edgeData = JsonSerializer.Deserialize<PlatformEnvelope<BizWrapper<ApiKeyAmountData>>>(monthEdgeJson, Json.Options)!.Data?.BizData;
     var edgeUsage = MonthUsage.Aggregated(1785513600, 1788192000, 28800, edgeData, null);
