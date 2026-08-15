@@ -39,10 +39,10 @@ public static class Formatting
         return Format(n);
     }
 
-    /// <summary>Token 完整数值（千分位整数，用于悬停详情）。</summary>
+    /// <summary>Token 完整数值（千分位，用于悬停详情）。不用 long 强转以避免超大数值溢出。</summary>
     public static string TokenFullString(double n)
     {
-        return ((long)Math.Round(n)).ToString("N0", CultureInfo.InvariantCulture);
+        return n.ToString("N0", CultureInfo.InvariantCulture);
     }
 
     /// <summary>请求数展示：千分位。</summary>

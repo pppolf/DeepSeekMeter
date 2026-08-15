@@ -19,7 +19,8 @@ public sealed class SparklineControl : System.Windows.FrameworkElement
             nameof(Entries),
             typeof(IReadOnlyList<Entry>),
             typeof(SparklineControl),
-            new FrameworkPropertyMetadata(Array.Empty<Entry>(), FrameworkPropertyMetadataOptions.AffectsRender));
+            new FrameworkPropertyMetadata(Array.Empty<Entry>(),
+                FrameworkPropertyMetadataOptions.AffectsRender, OnHoverAffectingPropertyChanged));
 
     public IReadOnlyList<Entry> Entries
     {
@@ -33,12 +34,22 @@ public sealed class SparklineControl : System.Windows.FrameworkElement
             nameof(MetricName),
             typeof(string),
             typeof(SparklineControl),
-            new PropertyMetadata("Token"));
+            new PropertyMetadata("Token", OnHoverAffectingPropertyChanged));
 
     public string MetricName
     {
         get => (string)GetValue(MetricNameProperty);
         set => SetValue(MetricNameProperty, value);
+    }
+
+    private int _lastHoverIndex = -1;
+
+    /// <summary>指标或数据变化时重置悬停缓存，保证 ToolTip 立即反映最新指标/数据。</summary>
+    private static void OnHoverAffectingPropertyChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        var control = (SparklineControl)d;
+        control._lastHoverIndex = -1;
+        control.ToolTip = null;
     }
 
     protected override void OnRender(DrawingContext dc)
@@ -108,16 +119,19 @@ public sealed class SparklineControl : System.Windows.FrameworkElement
         var entries = Entries;
         if (entries is null || entries.Count == 0 || ActualWidth <= 0)
         {
-            ToolTip = null;
+            ClearHover();
             return;
         }
         double slot = ActualWidth / entries.Count;
         int index = (int)(e.GetPosition(this).X / slot);
         if (index < 0 || index >= entries.Count)
         {
-            ToolTip = null;
+            ClearHover();
             return;
         }
+        if (index == _lastHoverIndex) return; // 槽位未变，不重复更新 ToolTip
+
+        _lastHoverIndex = index;
         var entry = entries[index];
         ToolTip = $"{entry.Date.Month}月{entry.Date.Day}日\n{MetricName}\n{Formatting.TokenFullString(entry.Value)} Token";
     }
@@ -125,6 +139,12 @@ public sealed class SparklineControl : System.Windows.FrameworkElement
     protected override void OnMouseLeave(MouseEventArgs e)
     {
         base.OnMouseLeave(e);
+        ClearHover();
+    }
+
+    private void ClearHover()
+    {
+        _lastHoverIndex = -1;
         ToolTip = null;
     }
 }
