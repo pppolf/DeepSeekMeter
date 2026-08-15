@@ -14,7 +14,54 @@
 			path = DeepSeekMeter.app;
 			sourceTree = BUILT_PRODUCTS_DIR;
 		};
+		B10000000000000000000001 /* DeepSeekMeterWidget.appex */ = {
+			isa = PBXFileReference;
+			explicitFileType = "wrapper.app-extension";
+			includeInIndex = 0;
+			path = DeepSeekMeterWidget.appex;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
 /* End PBXFileReference section */
+
+/* Begin PBXBuildFile section */
+		B10000000000000000000008 /* DeepSeekMeterWidget.appex in Embed App Extensions */ = {
+			isa = PBXBuildFile;
+			fileRef = B10000000000000000000001 /* DeepSeekMeterWidget.appex */;
+			settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); };
+		};
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		B1000000000000000000000A /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A1000000000000000000000C /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = B10000000000000000000003;
+			remoteInfo = DeepSeekMeterWidget;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		B10000000000000000000007 /* Embed App Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				B10000000000000000000008 /* DeepSeekMeterWidget.appex in Embed App Extensions */,
+			);
+			name = "Embed App Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		B10000000000000000000009 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = B10000000000000000000003 /* DeepSeekMeterWidget */;
+			targetProxy = B1000000000000000000000A /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		A10000000000000000000001 /* DeepSeekMeter */ = {
@@ -26,10 +73,26 @@
 			path = DeepSeekMeter;
 			sourceTree = "<group>";
 		};
+		B10000000000000000000002 /* DeepSeekMeterWidget */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			explicitFileTypes = {
+			};
+			explicitFolders = (
+			);
+			path = DeepSeekMeterWidget;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		A10000000000000000000002 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B1000000000000000000000D /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -44,6 +107,7 @@
 			children = (
 				A10000000000000000000004 /* DeepSeekMeterCore */,
 				A10000000000000000000001 /* DeepSeekMeter */,
+				B10000000000000000000002 /* DeepSeekMeterWidget */,
 				A10000000000000000000005 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -60,6 +124,7 @@
 			isa = PBXGroup;
 			children = (
 				A10000000000000000000006 /* DeepSeekMeter.app */,
+				B10000000000000000000001 /* DeepSeekMeterWidget.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -74,10 +139,12 @@
 				A10000000000000000000009 /* Sources */,
 				A10000000000000000000002 /* Frameworks */,
 				A1000000000000000000000A /* Resources */,
+				B10000000000000000000007 /* Embed App Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				B10000000000000000000009 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				A10000000000000000000001 /* DeepSeekMeter */,
@@ -90,6 +157,29 @@
 			productReference = A10000000000000000000006 /* DeepSeekMeter.app */;
 			productType = "com.apple.product-type.application";
 		};
+		B10000000000000000000003 /* DeepSeekMeterWidget */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = B10000000000000000000004 /* Build configuration list for PBXNativeTarget "DeepSeekMeterWidget" */;
+			buildPhases = (
+				B1000000000000000000000C /* Sources */,
+				B1000000000000000000000D /* Frameworks */,
+				B1000000000000000000000E /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				B10000000000000000000002 /* DeepSeekMeterWidget */,
+			);
+			name = DeepSeekMeterWidget;
+			packageProductDependencies = (
+				B1000000000000000000000B /* DeepSeekMeterCore */,
+			);
+			productName = DeepSeekMeterWidget;
+			productReference = B10000000000000000000001 /* DeepSeekMeterWidget.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -101,6 +191,9 @@
 				LastUpgradeCheck = 1600;
 				TargetAttributes = {
 					A10000000000000000000007 = {
+						CreatedOnToolsVersion = 16.0;
+					};
+					B10000000000000000000003 = {
 						CreatedOnToolsVersion = 16.0;
 					};
 				};
@@ -123,6 +216,7 @@
 			projectRoot = "";
 			targets = (
 				A10000000000000000000007 /* DeepSeekMeter */,
+				B10000000000000000000003 /* DeepSeekMeterWidget */,
 			);
 		};
 /* End PBXProject section */
@@ -135,10 +229,24 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		B1000000000000000000000E /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		A10000000000000000000009 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B1000000000000000000000C /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -209,6 +317,58 @@
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 			};
 			name = Debug;
+		};
+		B10000000000000000000005 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = DeepSeekMeter.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = DeepSeekMeterWidgetInfo.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "DeepSeekMeter 余额";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.deepseek.meter.ios.widget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		B10000000000000000000006 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = DeepSeekMeter.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = DeepSeekMeterWidgetInfo.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "DeepSeekMeter 余额";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.deepseek.meter.ios.widget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
 		};
 		A10000000000000000000012 /* Release */ = {
 			isa = XCBuildConfiguration;
@@ -322,6 +482,15 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
+		B10000000000000000000004 /* Build configuration list for PBXNativeTarget "DeepSeekMeterWidget" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B10000000000000000000005 /* Debug */,
+				B10000000000000000000006 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		A1000000000000000000000D /* Build configuration list for PBXProject "DeepSeekMeter" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
@@ -342,6 +511,11 @@
 
 /* Begin XCSwiftPackageProductDependency section */
 		A1000000000000000000000B /* DeepSeekMeterCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A1000000000000000000000E /* XCLocalSwiftPackageReference "DeepSeekMeterCore" */;
+			productName = DeepSeekMeterCore;
+		};
+		B1000000000000000000000B /* DeepSeekMeterCore */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = A1000000000000000000000E /* XCLocalSwiftPackageReference "DeepSeekMeterCore" */;
 			productName = DeepSeekMeterCore;

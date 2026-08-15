@@ -343,6 +343,12 @@ Task {
         check(false, "异常类型不符：\(error)")
     }
 
+// 13. BalanceSnapshot 小组件快照（App Group UserDefaults 读写回环；进程内可用，设备上跨进程）
+BalanceSnapshot.save(balance: 42.5, currency: "USD")
+let snap = BalanceSnapshot.load()
+check(abs(snap.balance - 42.5) < 0.001 && snap.currency == "USD", "快照写入/读取")
+check(snap.updated != nil, "快照更新时间")
+
     // 12. AppModel 状态机（内存 TokenStore + URLProtocol Mock 路由 4 个接口）
     final class MemoryTokenStore: TokenStoring {
         private var stored: String?

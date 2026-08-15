@@ -46,8 +46,8 @@ for t in p.get("targets", []):
         errors.append(f"target {t} 不存在"); continue
     if target.get("isa") != "PBXNativeTarget":
         errors.append(f"{t} 不是 native target"); continue
-    if target.get("productType") != "com.apple.product-type.application":
-        errors.append(f"target {t} productType 应为 application")
+    if target.get("productType") not in ("com.apple.product-type.application", "com.apple.product-type.app-extension"):
+        errors.append(f"target {t} productType 异常（应为 application 或 app-extension）")
     cl = objs.get(target.get("buildConfigurationList"))
     if not cl or cl.get("isa") != "XCConfigurationList":
         errors.append(f"target {t} 配置列表缺失")
@@ -94,6 +94,50 @@ for oid, o in objs.items():
             ac = os.path.join(root, f"DeepSeekMeter/Assets.xcassets/{icon}.appiconset")
             if not os.path.isdir(ac):
                 errors.append(f"AppIcon 资产不存在: {ac}")
+
+
+# 7. target 依赖链：PBXTargetDependency -> PBXContainerItemProxy -> PBXNativeTarget
+for oid, o in objs.items():
+    if o.get("isa") == "PBXTargetDependency":
+        tp = objs.get(o.get("targetProxy"))
+        if not tp or tp.get("isa") != "PBXContainerItemProxy":
+            errors.append(f"依赖 {oid} 的 targetProxy 无效")
+        else:
+            rid = tp.get("remoteGlobalIDString")
+            if not rid or objs.get(rid, {}).get("isa") != "PBXNativeTarget":
+                errors.append(f"代理 {oid} 的 remoteGlobalIDString 未指向 native target")
+
+# 8. PBXBuildFile.fileRef 必须存在（嵌入扩展/资源引用）
+for oid, o in objs.items():
+    if o.get("isa") == "PBXBuildFile":
+        fr = o.get("fileRef")
+        if not fr or fr not in objs:
+            errors.append(f"PBXBuildFile {oid} 的 fileRef 无效")
+
+# 9. 扩展目标：Info.plist 必须声明 widgetkit-extension
+for oid, o in objs.items():
+    if o.get("isa") == "XCBuildConfiguration":
+        bs = o.get("buildSettings", {})
+        ip = bs.get("INFOPLIST_FILE")
+        if ip and "Widget" in str(ip) and os.path.isfile(os.path.join(root, ip)):
+            import subprocess as sp
+            out = sp.run(["plutil", "-convert", "json", "-o", "-", os.path.join(root, ip)],
+                         capture_output=True, text=True)
+            if out.returncode == 0:
+                info = json.loads(out.stdout)
+                ext = info.get("NSExtension", {}).get("NSExtensionPointIdentifier")
+                if ext != "com.apple.widgetkit-extension":
+                    errors.append(f"扩展 Info.plist {ip} 缺少 NSExtensionPointIdentifier=com.apple.widgetkit-extension")
+
+# 10. 主 target 必须包含 Embed App Extensions 阶段且依赖 widget target
+for t in p.get("targets", []):
+    target = objs.get(t, {})
+    if target.get("productType") == "com.apple.product-type.application":
+        has_embed = any(objs.get(ph, {}).get("isa") == "PBXCopyFilesBuildPhase" for ph in target.get("buildPhases", []))
+        if not has_embed:
+            errors.append(f"应用 target {t} 缺少 Embed App Extensions 阶段")
+        if not target.get("dependencies"):
+            errors.append(f"应用 target {t} 没有 target 依赖（应依赖 Widget 扩展）")
 
 # 5. scheme 引用
 scheme = os.path.join(root, "DeepSeekMeter.xcodeproj/xcshareddata/xcschemes/DeepSeekMeter.xcscheme")
