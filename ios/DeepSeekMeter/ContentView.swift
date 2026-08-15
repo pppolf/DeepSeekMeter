@@ -20,5 +20,11 @@ struct ContentView: View {
         .sheet(isPresented: $showLogin) {
             LoginView(appModel: appModel)
         }
+        // 余额低于阈值时弹本地通知（纯本地，无第三方推送）
+        .onChange(of: appModel.lastBalance?.total) { _, newValue in
+            if let total = newValue {
+                NotificationService.notifyLowBalanceIfNeeded(balance: total, currency: appModel.currency)
+            }
+        }
     }
 }
