@@ -99,7 +99,7 @@ dotnet run --project tests/DeepSeekMeter.Selftest -c Release   # 运行自测
 
 ## 🖼️ 图标素材
 
-Windows 端鲸鱼娘金钱主题图标由 **AI 为本项目生成**，并非 DeepSeek 官方图标或官方角色素材。DeepSeek 相关名称、商标及官方品牌资产归其权利人所有。详见 [`assets/ATTRIBUTION.md`](assets/ATTRIBUTION.md)。
+Windows 端鲸鱼娘金钱主题图标由 **AI 为本项目生成**，并非 DeepSeek 官方图标或官方角色素材。DeepSeek 相关名称、商标及官方品牌资产归其权利人所有。详见 [`assets/ATTRIBUTION.zh-CN.md`](assets/ATTRIBUTION.zh-CN.md)。
 
 ## ❓ 常见问题
 

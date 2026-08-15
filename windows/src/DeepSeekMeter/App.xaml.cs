@@ -53,6 +53,24 @@ public partial class App : System.Windows.Application
             await Task.Delay(500);
             _tray?.ShowPopover();
         });
+
+        // 展示一次迁移/解密警告（构造期间产生，此时 UI 已可订阅）
+        ShowStartupWarning();
+    }
+
+    /// <summary>展示一次迁移/解密警告（不含 Token）。</summary>
+    private void ShowStartupWarning()
+    {
+        if (_settings is null || string.IsNullOrEmpty(_settings.StartupWarning)) return;
+        var warning = _settings.StartupWarning;
+        try
+        {
+            MessageBox.Show(warning, "DeepSeek Meter", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+        catch
+        {
+            // 无桌面会话时忽略提示
+        }
     }
 
     /// <summary>启动时核对设置与注册表真实状态，保证界面显示的是真实自启状态。</summary>

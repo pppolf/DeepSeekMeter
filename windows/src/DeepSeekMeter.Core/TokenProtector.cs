@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
 using System.Text;
 
 namespace DeepSeekMeter.Core;
@@ -7,6 +8,7 @@ namespace DeepSeekMeter.Core;
 /// 平台 Token 保护：使用 Windows DPAPI（CryptProtectData/CryptUnprotectData），
 /// 绑定当前 Windows 用户（CurrentUser 语义，无额外熵），零第三方依赖。
 /// 密文仅在当前用户会话内可解密；解密失败调用方按「需要重新登录」处理。
+/// 明文临时缓冲（托管与非托管）在用后清零，非托管 LocalAlloc 在所有路径统一 LocalFree。
 /// </summary>
 public static class TokenProtector
 {
@@ -25,23 +27,51 @@ public static class TokenProtector
         if (string.IsNullOrEmpty(plain)) return [];
 
         var plainBytes = Encoding.UTF8.GetBytes(plain);
-        var inBlob = new DataBlob { cbData = plainBytes.Length, pbData = Marshal.AllocHGlobal(plainBytes.Length) };
+        try
+        {
+            return ProtectCore(plainBytes);
+        }
+        finally
+        {
+            // 清理托管明文副本
+            CryptographicOperations.ZeroMemory(plainBytes);
+        }
+    }
+
+    private static byte[] ProtectCore(byte[] plainBytes)
+    {
+        var inBlob = default(DataBlob);
+        var outBlob = default(DataBlob);
+        inBlob.pbData = Marshal.AllocHGlobal(plainBytes.Length);
+        inBlob.cbData = plainBytes.Length;
         try
         {
             Marshal.Copy(plainBytes, 0, inBlob.pbData, plainBytes.Length);
             var entropy = default(DataBlob); // 无额外熵，仅绑定当前用户
-            var outBlob = default(DataBlob);
             if (!CryptProtectData(ref inBlob, null, ref entropy, IntPtr.Zero, IntPtr.Zero, CryptprotectUiForbidden, ref outBlob))
-                throw new InvalidOperationException("令牌加密失败");
-
+            {
+                var winErr = Marshal.GetLastWin32Error();
+                throw new InvalidOperationException($"令牌加密失败（错误码 0x{winErr:X8}）");
+            }
             var result = new byte[outBlob.cbData];
             Marshal.Copy(outBlob.pbData, result, 0, outBlob.cbData);
-            LocalFree(outBlob.pbData);
             return result;
         }
         finally
         {
-            Marshal.FreeHGlobal(inBlob.pbData);
+            // 释放 DPAPI 输出（LocalAlloc）
+            if (outBlob.pbData != IntPtr.Zero)
+            {
+                LocalFree(outBlob.pbData);
+                outBlob.pbData = IntPtr.Zero;
+            }
+            // 释放前清零非托管输入缓冲（含明文）
+            if (inBlob.pbData != IntPtr.Zero)
+            {
+                ZeroNative(inBlob.pbData, plainBytes.Length);
+                Marshal.FreeHGlobal(inBlob.pbData);
+                inBlob.pbData = IntPtr.Zero;
+            }
         }
     }
 
@@ -50,19 +80,27 @@ public static class TokenProtector
     {
         if (cipher is null || cipher.Length == 0) return null;
 
-        var inBlob = new DataBlob { cbData = cipher.Length, pbData = Marshal.AllocHGlobal(cipher.Length) };
+        var inBlob = default(DataBlob);
+        var outBlob = default(DataBlob);
+        inBlob.pbData = Marshal.AllocHGlobal(cipher.Length);
+        inBlob.cbData = cipher.Length;
         try
         {
             Marshal.Copy(cipher, 0, inBlob.pbData, cipher.Length);
             var entropy = default(DataBlob);
-            var outBlob = default(DataBlob);
             if (!CryptUnprotectData(ref inBlob, null, ref entropy, IntPtr.Zero, IntPtr.Zero, CryptprotectUiForbidden, ref outBlob))
                 return null;
 
-            var result = new byte[outBlob.cbData];
-            Marshal.Copy(outBlob.pbData, result, 0, outBlob.cbData);
-            LocalFree(outBlob.pbData);
-            return Encoding.UTF8.GetString(result);
+            var plainBytes = new byte[outBlob.cbData];
+            Marshal.Copy(outBlob.pbData, plainBytes, 0, outBlob.cbData);
+            try
+            {
+                return Encoding.UTF8.GetString(plainBytes);
+            }
+            finally
+            {
+                CryptographicOperations.ZeroMemory(plainBytes);
+            }
         }
         catch
         {
@@ -70,7 +108,33 @@ public static class TokenProtector
         }
         finally
         {
-            Marshal.FreeHGlobal(inBlob.pbData);
+            if (outBlob.pbData != IntPtr.Zero)
+            {
+                LocalFree(outBlob.pbData);
+                outBlob.pbData = IntPtr.Zero;
+            }
+            if (inBlob.pbData != IntPtr.Zero)
+            {
+                // 密文不敏感，但保持一致清理
+                Marshal.FreeHGlobal(inBlob.pbData);
+                inBlob.pbData = IntPtr.Zero;
+            }
+        }
+    }
+
+    private static readonly byte[] ZeroBuffer = new byte[1024];
+
+    /// <summary>清零非托管内存（用于含明文的输入缓冲）。</summary>
+    private static void ZeroNative(IntPtr ptr, int length)
+    {
+        int remaining = length;
+        int offset = 0;
+        while (remaining > 0)
+        {
+            int chunk = Math.Min(remaining, ZeroBuffer.Length);
+            Marshal.Copy(ZeroBuffer, 0, ptr + offset, chunk);
+            offset += chunk;
+            remaining -= chunk;
         }
     }
 

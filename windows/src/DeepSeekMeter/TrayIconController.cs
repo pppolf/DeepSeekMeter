@@ -14,10 +14,9 @@ public sealed class TrayIconController : IDisposable
     private readonly MainViewModel _model;
     private readonly System.Windows.Forms.NotifyIcon _notifyIcon;
     private readonly System.Windows.Forms.ContextMenuStrip _menu;
-    private Icon? _icon;
-    private IntPtr _iconHandle;
+    private Icon? _currentIcon;
     private readonly Dictionary<int, Icon> _statusIconCache = new();
-    private readonly List<IntPtr> _ownedIconHandles = new();
+    private Bitmap? _trayBaseBitmap; // 实例级母版，Dispose 时释放
     private PopoverWindow? _popover;
     private bool _disposed;
 
@@ -138,7 +137,7 @@ public sealed class TrayIconController : IDisposable
         return "DeepSeek Meter · 未登录";
     }
 
-    /// <summary>按状态颜色缓存托盘图标（鲸鱼娘 + 右下角状态点），避免每次刷新重复创建并泄漏句柄。</summary>
+    /// <summary>按状态颜色缓存托盘图标（鲸鱼娘 + 右下角状态点），避免每次刷新重复创建。</summary>
     private Icon GetStatusIcon(Color color)
     {
         int key = color.ToArgb();
@@ -146,25 +145,25 @@ public sealed class TrayIconController : IDisposable
 
         var icon = BuildStatusIcon(color);
         _statusIconCache[key] = icon;
-        _ownedIconHandles.Add(icon.Handle);
         return icon;
     }
 
-    /// <summary>加载简化鲸鱼娘母版（嵌入资源，静态缓存）。</summary>
-    private static Bitmap? _baseBitmap;
-    private static Bitmap LoadBaseBitmap()
+    /// <summary>加载简化鲸鱼娘母版（嵌入资源，实例级缓存）。</summary>
+    private Bitmap LoadBaseBitmap()
     {
-        if (_baseBitmap is not null) return _baseBitmap;
+        if (_trayBaseBitmap is not null) return _trayBaseBitmap;
         using var stream = typeof(TrayIconController).Assembly
             .GetManifestResourceStream("DeepSeekMeter.Assets.whale-girl-tray.png");
-        _baseBitmap = stream is null ? new Bitmap(32, 32) : new Bitmap(stream);
-        return _baseBitmap;
+        _trayBaseBitmap = stream is null ? new Bitmap(32, 32) : new Bitmap(stream);
+        return _trayBaseBitmap;
     }
 
-    /// <summary>绘制鲸鱼娘托盘图标：高质量缩放母版，右下角叠加白描边状态点（不挡眼睛/发饰/金币）。</summary>
-    private static Icon BuildStatusIcon(Color statusColor)
+    /// <summary>
+    /// 绘制鲸鱼娘托盘图标：高质量缩放母版，右下角叠加白描边状态点。
+    /// 句柄所有权：GetHicon 得到原始句柄 → FromHandle 临时包装 → Clone 出 .NET 独立拥有的 Icon → finally DestroyIcon 原始句柄。
+    /// </summary>
+    private Icon BuildStatusIcon(Color statusColor)
     {
-        // 注意：baseBmp 是静态缓存（_baseBitmap），不能在这里 Dispose，否则下次渲染会用到已释放的 Bitmap
         var baseBmp = LoadBaseBitmap();
         using var bmp = new Bitmap(32, 32);
         using (var g = Graphics.FromImage(bmp))
@@ -183,15 +182,23 @@ public sealed class TrayIconController : IDisposable
             using var brush = new SolidBrush(statusColor);
             g.FillEllipse(brush, x, y, dot, dot);
         }
-        return Icon.FromHandle(bmp.GetHicon());
+
+        IntPtr hIcon = bmp.GetHicon();
+        try
+        {
+            using var temp = Icon.FromHandle(hIcon);
+            return (Icon)temp.Clone(); // 克隆出由 .NET 独立拥有的 Icon，可安全缓存并 Dispose
+        }
+        finally
+        {
+            DestroyIcon(hIcon); // 释放原始句柄，避免泄漏
+        }
     }
 
     private void SetIcon(Icon icon)
     {
-        if (ReferenceEquals(_icon, icon)) return;
-        // 图标句柄由 _ownedIconHandles 统一管理，切换时不释放（缓存复用）
-        _icon = icon;
-        _iconHandle = icon.Handle;
+        if (ReferenceEquals(_currentIcon, icon)) return;
+        _currentIcon = icon;
         _notifyIcon.Icon = icon;
     }
 
@@ -205,20 +212,15 @@ public sealed class TrayIconController : IDisposable
         _popover?.Close();
         _popover = null;
 
-        // 统一释放所有缓存托盘图标句柄与对象（含当前图标）
-        _icon = null;
-        _iconHandle = IntPtr.Zero;
-        foreach (var handle in _ownedIconHandles)
-        {
-            if (handle != IntPtr.Zero) DestroyIcon(handle);
-        }
-        _ownedIconHandles.Clear();
+        // 先隐藏并清空托盘图标，再释放缓存的克隆 Icon 与母版 Bitmap
+        _notifyIcon.Visible = false;
+        _notifyIcon.Icon = null;
+        _currentIcon = null;
         foreach (var icon in _statusIconCache.Values) icon.Dispose();
         _statusIconCache.Clear();
-        _baseBitmap?.Dispose();
-        _baseBitmap = null;
+        _trayBaseBitmap?.Dispose();
+        _trayBaseBitmap = null;
 
-        _notifyIcon.Visible = false;
         _notifyIcon.Dispose();
         _menu.Dispose();
     }
