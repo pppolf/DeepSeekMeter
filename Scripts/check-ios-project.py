@@ -107,12 +107,19 @@ for oid, o in objs.items():
             if not rid or objs.get(rid, {}).get("isa") != "PBXNativeTarget":
                 errors.append(f"代理 {oid} 的 remoteGlobalIDString 未指向 native target")
 
-# 8. PBXBuildFile.fileRef 必须存在（嵌入扩展/资源引用）
+# 8. PBXBuildFile：fileRef（普通资源/扩展）或 productRef（Swift 包产品）必须存在
 for oid, o in objs.items():
     if o.get("isa") == "PBXBuildFile":
         fr = o.get("fileRef")
-        if not fr or fr not in objs:
-            errors.append(f"PBXBuildFile {oid} 的 fileRef 无效")
+        pr = o.get("productRef")
+        if fr is not None:
+            if fr not in objs or objs.get(fr, {}).get("isa") != "PBXFileReference":
+                errors.append(f"PBXBuildFile {oid} 的 fileRef 无效")
+        elif pr is not None:
+            if pr not in objs or objs.get(pr, {}).get("isa") != "XCSwiftPackageProductDependency":
+                errors.append(f"PBXBuildFile {oid} 的 productRef 无效")
+        else:
+            errors.append(f"PBXBuildFile {oid} 缺少 fileRef/productRef")
 
 # 9. 扩展目标：Info.plist 必须声明 widgetkit-extension
 for oid, o in objs.items():

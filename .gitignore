@@ -13,6 +13,7 @@ windows/publish/
 ios/**/xcuserdata/
 ios/**/DerivedData/
 ios/build/
+ios/build-dev/
 ios/DeepSeekMeterCore/.build/
 
 # VSCode 本地配置（不入库）
