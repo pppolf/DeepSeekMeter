@@ -35,4 +35,10 @@
     <Using Remove="System.Windows.Forms" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- 鲸鱼娘图标资源：托盘与窗口品牌共用（嵌入程序集，无运行时外部文件依赖） -->
+    <EmbeddedResource Include="..\..\assets\whale-girl-main.png" LogicalName="DeepSeekMeter.Assets.whale-girl-main.png" />
+    <EmbeddedResource Include="..\..\assets\whale-girl-tray.png" LogicalName="DeepSeekMeter.Assets.whale-girl-tray.png" />
+  </ItemGroup>
+
 </Project>

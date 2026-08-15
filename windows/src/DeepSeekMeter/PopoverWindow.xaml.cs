@@ -1,6 +1,8 @@
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using DeepSeekMeter.Core;
 
 namespace DeepSeekMeter;
@@ -18,9 +20,6 @@ public partial class PopoverWindow : Window
     /// <summary>模型用量行（UI 展示用）。</summary>
     private sealed record ModelRow(string Name, string Detail);
 
-    /// <summary>Token 趋势指标（对齐 TrendMetric）。</summary>
-    private enum TrendMetric { Output, CacheHit, Total }
-
     private TrendMetric _trend = TrendMetric.Output;
 
     public PopoverWindow(MainViewModel model)
@@ -28,6 +27,7 @@ public partial class PopoverWindow : Window
         InitializeComponent();
         _model = model;
         SetTopmost(true); // 默认置顶：启动即在前台可见，不藏后台
+        LoadBrandIcon();   // 加载简化鲸鱼娘品牌图标
         _model.PropertyChanged += (_, _) => Refresh();
         _model.Settings.PropertyChanged += (_, _) => Refresh(); // 开机自启回滚等设置变化时同步 UI
         Loaded += (_, _) =>
@@ -36,6 +36,27 @@ public partial class PopoverWindow : Window
             Refresh(); // 首次布局完成后填充内容
         };
         Refresh();
+    }
+
+    /// <summary>加载简化鲸鱼娘品牌图标（嵌入资源）替换 emoji。</summary>
+    private void LoadBrandIcon()
+    {
+        try
+        {
+            using var stream = GetType().Assembly.GetManifestResourceStream("DeepSeekMeter.Assets.whale-girl-tray.png");
+            if (stream is null) return;
+            var bitmap = new BitmapImage();
+            bitmap.BeginInit();
+            bitmap.CacheOption = BitmapCacheOption.OnLoad;
+            bitmap.StreamSource = stream;
+            bitmap.EndInit();
+            bitmap.Freeze();
+            BrandIcon.Source = bitmap;
+        }
+        catch
+        {
+            // 图标加载失败不阻塞窗口
+        }
     }
 
     // MARK: - 定位（基于托盘点击点）
@@ -137,8 +158,25 @@ public partial class PopoverWindow : Window
         _topmost = topmost;
         Topmost = topmost;
         PinButton.IsChecked = topmost;
-        PinButton.Opacity = topmost ? 1.0 : 0.45;
-        PinButton.ToolTip = topmost ? "已置顶（保持在所有窗口最前）" : "置顶（保持在所有窗口最前）";
+
+        if (topmost)
+        {
+            // 已置顶：竖直图钉 + 主题蓝轮廓 + 明显选中背景
+            PinRotate.Angle = 0;
+            PinPath.Stroke = new SolidColorBrush(Color.FromRgb(77, 107, 254));
+            PinButton.Background = new SolidColorBrush(Color.FromArgb(26, 77, 107, 254));
+            PinButton.ToolTip = "取消置顶";
+            PinButton.SetValue(AutomationProperties.NameProperty, "取消置顶");
+        }
+        else
+        {
+            // 未置顶：斜图钉 + 中性灰轮廓
+            PinRotate.Angle = 45;
+            PinPath.Stroke = new SolidColorBrush(Color.FromRgb(107, 107, 118));
+            PinButton.Background = Brushes.Transparent;
+            PinButton.ToolTip = "置顶窗口";
+            PinButton.SetValue(AutomationProperties.NameProperty, "置顶窗口");
+        }
     }
 
     // MARK: - 刷新全部 UI
@@ -322,6 +360,7 @@ public partial class PopoverWindow : Window
     {
         var usage = _model.MonthUsage;
         TrendEmptyText.Visibility = Visibility.Collapsed;
+        TrendChart.MetricName = _trend.Label(); // 悬停详情使用当前指标名
 
         if (usage is null)
         {
@@ -358,12 +397,12 @@ public partial class PopoverWindow : Window
 
         var today = DateTime.Now;
         var todayDay = usage.AmountDays.FirstOrDefault(d => d.Date == today.ToString("yyyy-MM-dd"));
-        TrendTodayText.Text = $"今日 {Formatting.TokenString(todayDay is null ? 0 : DailyValue(todayDay))}";
+        TrendTodayText.Text = $"今日 {Formatting.TokenString(todayDay is null ? 0 : DailyValue(todayDay))} Token";
 
         if (entries.Count > 0)
         {
             var peak = entries.MaxBy(e => e.Value)!;
-            TrendPeakText.Text = $"峰值 {Formatting.TokenString(peak.Value)}（{peak.Date.Month}月{peak.Date.Day}日）";
+            TrendPeakText.Text = $"峰值 {Formatting.TokenString(peak.Value)} Token（{peak.Date.Month}月{peak.Date.Day}日）";
         }
         else
         {
