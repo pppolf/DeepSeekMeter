@@ -103,20 +103,25 @@ struct LoginWebView: UIViewRepresentable {
     @Binding var status: String
     let onToken: (String, @escaping (Bool) -> Void) -> Void
 
-    func makeUIView(context: Context) -> WKWebView {
+    /// 返回容器 UIView：内部承载主 WKWebView + 可能的 OAuth 弹窗覆盖层
+    func makeUIView(context: Context) -> UIView {
+        let container = UIView()
         let config = WKWebViewConfiguration()
-        config.websiteDataStore = WKWebsiteDataStore.nonPersistent()
-        let webView = WKWebView(frame: .zero, configuration: config)
+        config.websiteDataStore = context.coordinator.dataStore
+        let webView = WKWebView(frame: container.bounds, configuration: config)
+        webView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         webView.navigationDelegate = context.coordinator
         webView.uiDelegate = context.coordinator
         webView.customUserAgent = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
         context.coordinator.webView = webView
+        context.coordinator.container = container
+        container.addSubview(webView)
         context.coordinator.startPolling()
         webView.load(URLRequest(url: URL(string: "https://platform.deepseek.com/")!))
-        return webView
+        return container
     }
 
-    func updateUIView(_ uiView: WKWebView, context: Context) {}
+    func updateUIView(_ uiView: UIView, context: Context) {}
 
     func makeCoordinator() -> Coordinator {
         Coordinator(status: $status, onToken: onToken)
@@ -127,6 +132,9 @@ struct LoginWebView: UIViewRepresentable {
         let onToken: (String, @escaping (Bool) -> Void) -> Void
 
         weak var webView: WKWebView?
+        weak var container: UIView?
+        /// 主 WebView 与弹窗共享的 nonPersistent 数据存储（登录态互通，且不落盘浏览器缓存）
+        let dataStore = WKWebsiteDataStore.nonPersistent()
         private var pollTimer: Timer?
         private var isChecking = false
         private var isValidating = false
@@ -158,6 +166,48 @@ struct LoginWebView: UIViewRepresentable {
         /// 页面加载完成立即检测一次（无需等 1.5s 轮询）
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
             checkToken()
+        }
+
+        // MARK: - WKUIDelegate：OAuth/扫码弹窗在 App 内承接
+        // 历史教训：把 window.open 交给系统浏览器会把登录态落在 Safari，App 永远收不到 Token。
+        // 这里在容器内叠加一个共享 dataStore 的 popup WKWebView 覆盖层，并提供关闭按钮。
+
+        func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration,
+                     for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
+            let config = configuration
+            config.websiteDataStore = dataStore
+            let popup = WKWebView(frame: .zero, configuration: config)
+            popup.navigationDelegate = self
+            popup.uiDelegate = self
+            popup.customUserAgent = webView.customUserAgent
+            present(popup: popup)
+            return popup
+        }
+
+        private func present(popup: WKWebView) {
+            guard let container else { return }
+            let overlay = UIView(frame: container.bounds)
+            overlay.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+            overlay.backgroundColor = .systemBackground
+            container.addSubview(overlay)
+
+            popup.frame = overlay.bounds
+            popup.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+            overlay.addSubview(popup)
+
+            let closeButton = UIButton(type: .system)
+            closeButton.setTitle("✕ 关闭弹窗", for: .normal)
+            closeButton.addTarget(self, action: #selector(closePopup(_:)), for: .touchUpInside)
+            closeButton.translatesAutoresizingMaskIntoConstraints = false
+            overlay.addSubview(closeButton)
+            NSLayoutConstraint.activate([
+                closeButton.topAnchor.constraint(equalTo: overlay.safeAreaLayoutGuide.topAnchor, constant: 8),
+                closeButton.trailingAnchor.constraint(equalTo: overlay.trailingAnchor, constant: -12)
+            ])
+        }
+
+        @objc private func closePopup(_ sender: UIButton) {
+            sender.superview?.removeFromSuperview()
         }
 
         private func checkToken() {
