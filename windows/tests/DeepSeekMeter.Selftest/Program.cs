@@ -195,8 +195,7 @@ var tmpFile = Path.Combine(Path.GetTempPath(), $"dsm-settings-{Guid.NewGuid():N}
 try
 {
     var store = new SettingsStore(tmpFile);
-    store.PlatformToken = "test-token";
-    store.PlatformUserName = "test@example.com";
+    Check(store.TrySetPlatformCredentials("test-token", "test@example.com", out _), "原子设置凭据成功");
     store.RefreshInterval = 300;
     store.LaunchAtLogin = true;
 
@@ -206,7 +205,7 @@ try
     Check(Math.Abs(reloaded.RefreshInterval - 300) < 0.001, "设置往返：刷新间隔");
     Check(reloaded.LaunchAtLogin, "设置往返：开机自启");
 
-    reloaded.ClearPlatformToken();
+    Check(reloaded.TryClearPlatformCredentials(out _), "原子清除凭据成功");
     Check(reloaded.PlatformToken == "" && reloaded.PlatformUserName == "", "清除 Token");
 }
 finally
@@ -271,9 +270,15 @@ try
     var store3 = new SettingsStore(dirAsFile);
     var failed = false;
     store3.SaveFailed += _ => failed = true;
-    store3.RefreshInterval = 300; // 触发保存
+    store3.RefreshInterval = 300; // 触发保存失败
     Check(failed, "设置保存失败触发 SaveFailed 事件");
-    Check(!store3.LastSaveSucceeded, "设置保存失败后 LastSaveSucceeded 为 false");
+    Check(Math.Abs(store3.RefreshInterval - 60) < 0.001, "保存失败后刷新间隔回滚");
+
+    // 凭据落盘失败不会报告成功
+    var setOk = store3.TrySetPlatformCredentials("secret", "u@x.com", out var setErr);
+    Check(!setOk, "凭据落盘失败返回 false");
+    Check(!string.IsNullOrEmpty(setErr), "凭据落盘失败返回脱敏错误");
+    Check(store3.PlatformToken == "", "凭据落盘失败不更新内存 Token");
 }
 finally
 {
@@ -326,7 +331,7 @@ var encFile = Path.Combine(Path.GetTempPath(), $"dsm-enc-{Guid.NewGuid():N}.json
 try
 {
     var store = new SettingsStore(encFile);
-    store.PlatformToken = encToken;
+    store.TrySetPlatformCredentials(encToken, "", out _);
     var json = File.ReadAllText(encFile);
     Check(!json.Contains(encToken), "设置文件不含明文 Token");
     Check(json.Contains("PlatformTokenProtected"), "设置文件含加密字段 PlatformTokenProtected");
@@ -345,13 +350,14 @@ try
     }
     finally { if (File.Exists(legacyFile)) File.Delete(legacyFile); }
 
-    // 损坏密文安全回退（不崩溃，Token 视为空 = 需要重新登录）
+    // 损坏密文安全回退（不崩溃，Token 视为空 = 需要重新登录，且给出警告）
     var corruptFile = Path.Combine(Path.GetTempPath(), $"dsm-corrupt-{Guid.NewGuid():N}.json");
     try
     {
         File.WriteAllText(corruptFile, """{"PlatformTokenProtected":"!!not-base64!!"}""");
         var corrupt = new SettingsStore(corruptFile);
         Check(corrupt.PlatformToken == "", "损坏密文回退为空 Token");
+        Check(!string.IsNullOrEmpty(corrupt.StartupWarning), "损坏密文给出需要重新登录警告");
     }
     finally { if (File.Exists(corruptFile)) File.Delete(corruptFile); }
 
@@ -360,8 +366,8 @@ try
     try
     {
         var clear = new SettingsStore(clearFile);
-        clear.PlatformToken = "token-to-clear-456";
-        clear.ClearPlatformToken();
+        clear.TrySetPlatformCredentials("token-to-clear-456", "", out _);
+        Check(clear.TryClearPlatformCredentials(out _), "退出登录清除凭据成功");
         var clearedJson = File.ReadAllText(clearFile);
         Check(!clearedJson.Contains("token-to-clear-456"), "退出登录后文件不含 Token");
         Check(!clearedJson.Contains("PlatformTokenProtected"), "退出登录后无加密字段");
@@ -455,6 +461,30 @@ catch (Exception ex)
 {
     Check(false, $"by_api_key 解码/聚合抛错：{ex.Message}");
 }
+
+// 17. 明文迁移失败状态（.tmp 被目录占用导致写失败，保留旧明文并给出警告）
+var migrateFailFile = Path.Combine(Path.GetTempPath(), $"dsm-migfail-{Guid.NewGuid():N}.json");
+var migrateFailTmp = migrateFailFile + ".tmp";
+try
+{
+    File.WriteAllText(migrateFailFile, """{"PlatformToken":"migrate-fail-token","PlatformUserName":"u@x.com"}""");
+    Directory.CreateDirectory(migrateFailTmp); // 让 .tmp 路径成为目录，写文件失败
+    var s = new SettingsStore(migrateFailFile);
+    Check(s.PlatformToken == "", "迁移失败后 Token 为空");
+    Check(!string.IsNullOrEmpty(s.StartupWarning), "迁移失败给出警告");
+    Check(File.ReadAllText(migrateFailFile).Contains("migrate-fail-token"), "迁移失败保留旧明文文件");
+}
+finally
+{
+    if (Directory.Exists(migrateFailTmp)) Directory.Delete(migrateFailTmp, true);
+    if (File.Exists(migrateFailFile)) File.Delete(migrateFailFile);
+}
+
+// 18. 超大 Token 数值格式化（不用 long 强转，避免溢出）
+var huge = Formatting.TokenFullString(1e20);
+Check(huge.Length > 0, "超大数值格式化非空");
+Check(!huge.Contains("E+") && !huge.Contains("e+"), "超大数值不用科学计数法");
+Check(Formatting.TokenFullString(84217000) == "84,217,000", "正常千分位不变");
 
 if (failures > 0)
 {
