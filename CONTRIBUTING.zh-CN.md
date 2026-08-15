@@ -87,7 +87,7 @@ Conventional Commits + 中文描述：
 1. **不引入第三方依赖**——零依赖单 target 是刻意设计
 2. **Token 保持存 UserDefaults**——不要存回钥匙串（ad-hoc 签名下每次启动会弹密码授权；SettingsStore 已有一次性迁移逻辑）
 3. **不提交真实 Token / 凭据**——代码、日志、截图、提交信息都不行
-4. **不臆造平台接口**——PlatformService 访问 platform.deepseek.com 的**私有接口**（`get_user_summary` / `usage/amount` / `usage/cost`）；改 URL、参数或响应结构前先抓真实响应验证，并同步更新自测样例
+4. **不臆造平台接口**——PlatformService 访问 platform.deepseek.com 的**私有接口**（`get_user_summary` / `usage/by_api_key/amount` / `usage/by_api_key/cost`，参数 `start`/`end` 为 Unix 秒、`tz` 为秒偏移、`bucket` 分桶粒度）；改 URL、参数或响应结构前先抓真实响应验证，并同步更新自测样例
 5. **不改数据流向**——数据只来自 DeepSeek 官方接口，不上报任何第三方
 6. **不引入 Xcode 工程 / XCTest**——测试保持 swiftc 轻量自测；需要更重的测试设施先开 Issue
 7. **保持平台约束**——macOS 14+、Swift 5 语言模式

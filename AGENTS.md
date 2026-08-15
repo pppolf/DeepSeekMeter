@@ -119,7 +119,7 @@ Foundation / AppKit / SwiftUI / WebKit
 1. **不引入任何第三方依赖**。零依赖单 target 是刻意设计；新增依赖需先开 Issue 讨论
 2. **不把 Token 存回钥匙串**。Token 刻意存 UserDefaults（ad-hoc 签名下钥匙串会每次启动弹密码授权）；SettingsStore 中已有一次性迁移逻辑，保留即可
 3. **不把真实 Token / 凭据写进代码、日志、截图或提交**。调试一律用占位符
-4. **不臆造平台接口**。PlatformService 访问的是 platform.deepseek.com 的**私有接口**（`get_user_summary` / `usage/amount` / `usage/cost`），无公开文档；不要凭空猜测 URL、参数或响应字段——改动前抓真实响应验证，并同步更新 selftest 的样例 JSON
+4. **不臆造平台接口**。PlatformService 访问的是 platform.deepseek.com 的**私有接口**（`get_user_summary` / `usage/by_api_key/amount` / `usage/by_api_key/cost`，参数 `start`/`end` 为 Unix 秒、`tz` 为秒偏移、`bucket` 分桶粒度），无公开文档；不要凭空猜测 URL、参数或响应字段——改动前抓真实响应验证，并同步更新 selftest 的样例 JSON
 5. **不改数据流向**。所有数据只能来自 DeepSeek 官方接口，不得上报任何第三方；隐私承诺见 README「隐私与数据」
 6. **不引入 Xcode 工程或 XCTest**。测试保持 swiftc 轻量自测（Scripts/selftest/main.swift）；需要更重的测试设施先开 Issue
 7. **不破坏平台与语言模式约束**：macOS 14+、Swift 5 语言模式（Package.swift）
