@@ -72,7 +72,7 @@ ios/
 |   +-- Sources/DeepSeekMeterCoreSelftest/ # 轻量自测（可执行 target，不依赖 XCTest；CLT 环境可直接 swift run）
 |-- DeepSeekMeter/                         # iOS App target（SwiftUI）
 |   |-- DeepSeekMeterApp.swift             # @main
-|   |-- AppModel.swift                     # 状态中枢（对齐 macOS AppModel.swift：轮询/拉取/错误态）
+|   |-- AppModel.swift                     已收进核心包（见上 DeepSeekMeterCore/AppModel.swift，App 层不再重复）
 |   |-- TokenStore.swift                   # Keychain 实现 TokenStoring
 |   |-- LoginView.swift                    # WKWebView 登录页 + 「手动粘贴 Token」兜底（对齐 Windows 版）
 |   |-- Views/
@@ -237,7 +237,6 @@ android/
 | **M2 核心** ✅ | 移植 PlatformService/Models/Formatting/MonthUsage/DataStatus + 自测全绿（移植 selftest 用例与样例 JSON，另加 URLProtocol Mock 请求头/错误归一化用例与 AppModel 状态机用例） | 核心自测 80 项断言全绿（退出码 0），覆盖与 macOS selftest 对齐 |
 | **M3 App 主体** ✅ | 登录（WKWebView + 手动兜底 + Keychain）、概览/用量/趋势/设置四 Tab、AppModel 状态机（收进核心包，注入 TokenStoring+URLSession，本地可测） | 状态机 82 项断言全绿；本地模拟器构建+运行+截图验证通过（Xcode 26.6） |
 | **M4 打磨与分发** ✅（代码） | 后台刷新（BGAppRefreshTask + 前台 + 下拉）、错误六态、图标（鲸鱼娘扁平化 1024）、OAuth 弹窗 App 内承接、刷新间隔持久化、隐私说明；TestFlight 内测（需开发者账号，决策点 D1） | 代码就绪；TestFlight 待 D1，App 层待 CI/真机验证 |
-| **M4 打磨与分发** | 刷新（前台+BGTask+下拉）、错误六态、本地化、图标、隐私说明；TestFlight 内测（需开发者账号，决策点 D1） | TestFlight 可分发 |
 | **M5 可选增值** ✅ | 余额阈值本地通知（NotificationService，设置页开关 + 刷新后检测，纯本地无推送）；WidgetKit 余额小组件（DeepSeekMeterWidget 扩展 target，**快照驱动**：App 刷新后写入 App Group UserDefaults，小组件只读展示、不联网、不共享 Token；App Group 标识 group.com.deepseek.meter） | 代码与工程结构就绪；待 CI/真机验证 |
 | **A1–A5** | Android 版同序列（核心 -> App -> 打磨 -> APK/上架 -> 可选小组件）；核心迁移规格见 4.5，iOS 自测用例与样例 JSON 直接复用 | 与 iOS 功能对齐 |
 
