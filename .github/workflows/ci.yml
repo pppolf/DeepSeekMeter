@@ -95,6 +95,9 @@ jobs:
       - name: Core self-tests（核心包，macOS 上直接跑，无需模拟器）
         run: swift run --package-path ios/DeepSeekMeterCore DeepSeekMeterCoreSelftest
 
+      - name: Project structure check（无 Xcode 静态校验）
+        run: python3 Scripts/check-ios-project.py
+
       - name: Build app (iOS Simulator, no signing)
         run: |
           xcodebuild -project ios/DeepSeekMeter.xcodeproj -scheme DeepSeekMeter \

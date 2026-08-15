@@ -25,8 +25,9 @@ bash Scripts/run-tests.sh        # 运行自测（全绿才算通过）
 bash Scripts/build-app.sh release # 组装 build/DeepSeekMeter.app 并签名
 bash Scripts/install.sh          # 构建 + 安装到 /Applications 并启动
 
-# iOS 版验证（核心包自测必跑；有 Xcode 时还会构建 App 冒烟）
+# iOS 版验证（核心包自测 + 工程结构静态校验必跑；有 Xcode 时还会构建 App 冒烟）
 bash Scripts/run-ios-tests.sh
+python3 Scripts/check-ios-project.py   # 单独跑工程结构校验（无 Xcode 环境的把关）
 ```
 
 CI 的验证链：`swift build` → `swift build -c release` → `run-tests.sh` → `build-app.sh release` → 冒烟启动 6 秒。

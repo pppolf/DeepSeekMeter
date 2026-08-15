@@ -7,6 +7,9 @@ cd "$(dirname "$0")/.."
 echo "==> iOS 核心包自测"
 swift run --package-path ios/DeepSeekMeterCore DeepSeekMeterCoreSelftest
 
+echo "==> iOS 工程结构校验（静态，无需 Xcode）"
+python3 Scripts/check-ios-project.py
+
 # 注意：CLT 环境下也有 xcodebuild 存根（会报错），必须用 -version 探测真实 Xcode
 if xcodebuild -version >/dev/null 2>&1; then
   echo "==> 构建 iOS App（模拟器，无签名）"
