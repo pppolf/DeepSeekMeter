@@ -122,9 +122,11 @@ final class AppModel: ObservableObject {
             let comps = calendar.dateComponents([.year, .month], from: now)
             guard let start = calendar.date(from: DateComponents(year: comps.year, month: comps.month, day: 1)),
                   let end = calendar.date(byAdding: .month, value: 1, to: start) else {
-                throw PlatformError.decoding("无法计算本月时间范围")
+                // 纯日历计算理论上必然成功，防御性兜底
+                throw PlatformError.api(code: -1, msg: "无法计算本月时间范围")
             }
-            let tz = 8 * 3600 // UTC+8（北京时间），与平台计日口径一致
+            // 与 MonthUsage.platformCalendar 单一数据源，避免口径漂移
+            let tz = MonthUsage.platformTimeZone.secondsFromGMT()
             let startTs = Int(start.timeIntervalSince1970)
             let endTs = Int(end.timeIntervalSince1970)
             // by_api_key 接口实时返回当日数据（usage/amount、usage/cost 有数小时～次日延迟）

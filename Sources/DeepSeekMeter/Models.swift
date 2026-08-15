@@ -214,9 +214,11 @@ struct MonthUsage: Identifiable {
     // MARK: - by_api_key 序列聚合
 
     /// 把 by_api_key 的天桶序列聚合成 MonthUsage。
-    /// - startTs/endTs：查询窗口（Unix 秒），窗口外的桶会被忽略（防御越界数据）
+    /// - startTs/endTs：查询窗口（Unix 秒），窗口外的桶会被忽略（防御越界数据）；
+    ///   year/month 取自 startTs，调用方需保证 startTs 为本月 1 日
     /// - tzSeconds：桶所属时区的秒偏移（UTC+8 = 28800），决定日期归属与年月
-    /// - 费用只聚合 data 中第一个币种分组（与 usage/cost 旧实现「取第一个」一致），避免多币种混加
+    /// - 费用只聚合 data 中第一个币种分组（与 usage/cost 旧实现「取第一个」一致）；
+    ///   若平台未来返回多币种需扩展，当前不混加
     static func aggregated(
         startTs: Int,
         endTs: Int,
