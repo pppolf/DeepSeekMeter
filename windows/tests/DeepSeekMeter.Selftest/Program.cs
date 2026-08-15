@@ -296,6 +296,109 @@ var sorted = sortedDates
 Check(sorted.Count == 2, "未来日期被过滤");
 Check(sorted[0].Date == "2026-08-01" && sorted[1].Date == "2026-08-03", "日期升序排序");
 
+// 12. Token 显示单位（紧凑格式 + 完整千分位）
+Check(Formatting.TokenString(0) == "0", "TokenString(0) 显示 0");
+Check(Formatting.TokenString(5000) == "5000.0", "TokenString 小于 1 万（千位 1 位小数）");
+Check(Formatting.TokenString(500) == "500.00", "TokenString 小于 1 千（两位小数）");
+Check(Formatting.TokenString(14000) == "1.4万", "TokenString 1.4万");
+Check(Formatting.TokenString(350000000) == "3.50亿", "TokenString 3.50亿");
+Check(Formatting.TokenFullString(84217000) == "84,217,000", "TokenFullString 完整千分位");
+Check(Formatting.TokenFullString(0) == "0", "TokenFullString(0) 为 0");
+Check($"今日 {Formatting.TokenString(14000)} Token" == "今日 1.4万 Token", "今日 Token 文案");
+Check($"峰值 {Formatting.TokenString(288000)} Token" == "峰值 28.8万 Token", "峰值 Token 文案");
+Check($"84,217,000 Token" == $"{Formatting.TokenFullString(84217000)} Token", "悬停详情完整数值文案");
+
+// 13. 趋势指标名称映射（输出/缓存命中/总量）
+Check(TrendMetric.Output.Label() == "输出", "指标名 输出");
+Check(TrendMetric.CacheHit.Label() == "缓存命中", "指标名 缓存命中");
+Check(TrendMetric.Total.Label() == "总量", "指标名 总量");
+Check(TrendMetric.Output.Description() == "模型生成的输出 Token", "指标说明 输出");
+Check(TrendMetric.CacheHit.Description() == "从缓存直接复用的输入 Token", "指标说明 缓存命中");
+Check(TrendMetric.Total.Description() == "输出 + 缓存命中 + 缓存未命中 Token", "指标说明 总量");
+
+// 14. Token DPAPI 加密往返与设置文件不落明文
+var encToken = "test-token-value-123";
+var encBytes = TokenProtector.Protect(encToken);
+Check(TokenProtector.Unprotect(encBytes) == encToken, "Token 加密解密往返");
+Check(!Convert.ToBase64String(encBytes).Contains(encToken), "密文不含明文 Token");
+
+var encFile = Path.Combine(Path.GetTempPath(), $"dsm-enc-{Guid.NewGuid():N}.json");
+try
+{
+    var store = new SettingsStore(encFile);
+    store.PlatformToken = encToken;
+    var json = File.ReadAllText(encFile);
+    Check(!json.Contains(encToken), "设置文件不含明文 Token");
+    Check(json.Contains("PlatformTokenProtected"), "设置文件含加密字段 PlatformTokenProtected");
+    Check(!json.Contains("\"PlatformToken\""), "设置文件不再写 PlatformToken 明文字段");
+
+    // 旧明文配置自动迁移
+    var legacyFile = Path.Combine(Path.GetTempPath(), $"dsm-legacy-{Guid.NewGuid():N}.json");
+    try
+    {
+        File.WriteAllText(legacyFile, """{"PlatformToken":"legacy-plain-token","PlatformUserName":"u@x.com"}""");
+        var migrated = new SettingsStore(legacyFile);
+        Check(migrated.PlatformToken == "legacy-plain-token", "旧明文迁移后内存 Token 正确");
+        var migratedJson = File.ReadAllText(legacyFile);
+        Check(!migratedJson.Contains("legacy-plain-token"), "迁移后文件不含明文");
+        Check(migratedJson.Contains("PlatformTokenProtected"), "迁移后含加密字段");
+    }
+    finally { if (File.Exists(legacyFile)) File.Delete(legacyFile); }
+
+    // 损坏密文安全回退（不崩溃，Token 视为空 = 需要重新登录）
+    var corruptFile = Path.Combine(Path.GetTempPath(), $"dsm-corrupt-{Guid.NewGuid():N}.json");
+    try
+    {
+        File.WriteAllText(corruptFile, """{"PlatformTokenProtected":"!!not-base64!!"}""");
+        var corrupt = new SettingsStore(corruptFile);
+        Check(corrupt.PlatformToken == "", "损坏密文回退为空 Token");
+    }
+    finally { if (File.Exists(corruptFile)) File.Delete(corruptFile); }
+
+    // 退出登录后 Token 无法恢复
+    var clearFile = Path.Combine(Path.GetTempPath(), $"dsm-clear-{Guid.NewGuid():N}.json");
+    try
+    {
+        var clear = new SettingsStore(clearFile);
+        clear.PlatformToken = "token-to-clear-456";
+        clear.ClearPlatformToken();
+        var clearedJson = File.ReadAllText(clearFile);
+        Check(!clearedJson.Contains("token-to-clear-456"), "退出登录后文件不含 Token");
+        Check(!clearedJson.Contains("PlatformTokenProtected"), "退出登录后无加密字段");
+        Check(clear.PlatformToken == "", "退出登录后内存 Token 为空");
+    }
+    finally
+    {
+        if (File.Exists(clearFile)) File.Delete(clearFile);
+        if (File.Exists(clearFile + ".tmp")) File.Delete(clearFile + ".tmp");
+    }
+}
+finally
+{
+    if (File.Exists(encFile)) File.Delete(encFile);
+    if (File.Exists(encFile + ".tmp")) File.Delete(encFile + ".tmp");
+}
+
+// 15. URL 安全校验（内嵌页仅 https + deepseek.com 真实域名；外链仅 https）
+Check(UrlSafety.IsAllowedDeepSeekUrl("https://platform.deepseek.com"), "合法子域名");
+Check(UrlSafety.IsAllowedDeepSeekUrl("https://deepseek.com"), "合法主域名");
+Check(UrlSafety.IsAllowedDeepSeekUrl("https://platform.deepseek.com/usage"), "合法子域名+路径");
+Check(!UrlSafety.IsAllowedDeepSeekUrl("http://platform.deepseek.com"), "HTTP 拒绝");
+Check(!UrlSafety.IsAllowedDeepSeekUrl("https://deepseek.com.example.com"), "伪造后缀域名拒绝");
+Check(!UrlSafety.IsAllowedDeepSeekUrl("https://notdeepseek.com"), "相似域名拒绝");
+Check(!UrlSafety.IsAllowedDeepSeekUrl("https://deepseek.com.evil.com"), "攻击后缀拒绝");
+Check(!UrlSafety.IsAllowedDeepSeekUrl("javascript:alert(1)"), "javascript 拒绝");
+Check(!UrlSafety.IsAllowedDeepSeekUrl("file:///etc/passwd"), "file 拒绝");
+Check(!UrlSafety.IsAllowedDeepSeekUrl("data:text/html,hi"), "data 拒绝");
+Check(!UrlSafety.IsAllowedDeepSeekUrl("ms-settings:bluetooth"), "ms-settings 拒绝");
+Check(!UrlSafety.IsAllowedDeepSeekUrl("shell:startup"), "shell 拒绝");
+Check(!UrlSafety.IsAllowedDeepSeekUrl("not-a-url"), "无效 URL 拒绝");
+Check(UrlSafety.IsAllowedExternalUrl("https://example.com"), "外链 https 允许");
+Check(!UrlSafety.IsAllowedExternalUrl("http://example.com"), "外链 http 拒绝");
+Check(!UrlSafety.IsAllowedExternalUrl("file:///c:/x"), "外链 file 拒绝");
+Check(!UrlSafety.IsAllowedExternalUrl("javascript:x"), "外链 javascript 拒绝");
+Check(!UrlSafety.IsAllowedExternalUrl("ms-settings:x"), "外链 ms-settings 拒绝");
+
 if (failures > 0)
 {
     Console.WriteLine($"\n❌ {failures} 项未通过");
