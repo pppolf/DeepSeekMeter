@@ -54,3 +54,37 @@ bash Scripts/run-ios-simulator.sh
 - 证书 **7 天过期**，需每 7 天连电脑重签一次
 - **App Group 不可用** -> 小组件（WidgetKit）能装但读不到余额快照（显示 0）；Keychain 登录不受影响
 - 想长期稳定用（小组件 + 不用重签）：Apple Developer Program $99/年 -> TestFlight 分发，见 MOBILE-PLAN.md 决策点 D1
+
+
+## 发布到 GitHub（推分支 + PR）
+
+1. 推送分支（CI 会在 PR 上跑 macOS/Windows/iOS 全部构建与自测）：
+   ```bash
+   git switch -c feat/ios-mobile-app
+   git push -u origin feat/ios-mobile-app
+   ```
+2. 浏览器打开 GitHub 仓库 -> 会出现「Compare & pull request」按钮 -> 创建 PR（模板见 .github/pull_request_template.md）
+3. 等 CI 全绿后合入（建议 squash）；合入后本地 `git switch main && git pull`
+
+## 真机安装（二选一）
+
+> 前提：iPhone 需 iOS 17+（iPhone XS 及以上）；先连数据线并在 iPhone 上开启「设置 -> 隐私与安全性 -> 开发者模式」。
+
+### 路径 A：免费 Apple ID（零成本，7 天重签）
+
+1. Xcode -> Settings -> Accounts -> 添加你的免费 Apple ID
+2. 打开 ios/DeepSeekMeter.xcodeproj -> 选中 DeepSeekMeter target -> Signing & Capabilities -> Team 选你的 Apple ID
+3. **关键**：免费个人团队不支持 App Group（小组件要的）。两种处理任选：
+   - 命令行构建：`DEEPSEEK_ENTITLEMENTS=DeepSeekMeter.Free.entitlements xcodebuild ... CODE_SIGNING_ALLOWED=YES`
+   - 或 Xcode 里 target Build Settings -> User-Defined -> 新增 `DEEPSEEK_ENTITLEMENTS` = `DeepSeekMeter.Free.entitlements`（App 与 Widget 两个 target 都要）
+   - 或直接删掉 Signing & Capabilities 里的 App Group 能力（Xcode 会改 entitlements 文件）
+4. 顶部选择你的 iPhone -> Run；手机上点「信任此电脑」
+5. 结果：App 主体（登录/余额/用量/趋势/通知）全部可用；**小组件显示 0**（App Group 不可用，属预期）；证书 7 天过期，需每 7 天连电脑重签
+
+### 路径 B：Apple Developer Program（$99/年，推荐长期用）
+
+1. 注册 https://developer.apple.com/programs/ （需 Apple ID + 付款）
+2. Xcode -> Accounts 添加账号；Signing & Capabilities 选择你的 Team
+3. 在开发者后台注册 App Group ID（`group.com.deepseek.meter`）并勾选到 App 与 Widget 的 profile
+4. 直接 Run 即可；小组件、推送、7 天免重签全部可用
+5. 想正式分发（亲友/上架）：TestFlight / Ad-hoc，见 MOBILE-PLAN.md 决策点 D1
