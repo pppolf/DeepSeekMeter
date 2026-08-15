@@ -2,7 +2,7 @@
 
 The **iOS version** of DeepSeekMeter (in development): view your DeepSeek account balance, spending and token usage on your iPhone — feature-aligned with the [macOS](../README.md) and [Windows](../windows/README.md) versions, using the same platform API contract.
 
-> 总体规划（里程碑、决策点、红线适配）见 [MOBILE-PLAN.md](../MOBILE-PLAN.md)。当前进度：M1 骨架 ✅ / M2 核心包 + 自测 ✅（80 项断言全绿）/ M3 App 主体代码 ✅（状态机已本地自测；App 层待真机与 CI 验证）/ M4-M5 待启动。
+> 总体规划（里程碑、决策点、红线适配）见 [MOBILE-PLAN.md](../MOBILE-PLAN.md)。当前进度：M1 骨架 ✅ / M2 核心包 + 自测 ✅（80 项断言全绿）/ M3 App 主体代码 ✅ / M4 打磨代码 ✅（BGAppRefreshTask、App 图标、OAuth 弹窗内嵌；TestFlight 待开发者账号）/ M5 待启动。App 层待真机与 CI 验证。
 
 ## ✨ Features (target)
 
@@ -28,8 +28,11 @@ ios/
     Sources/DeepSeekMeterCoreSelftest/   Lightweight self-tests (no XCTest needed)
   DeepSeekMeter/                   iOS app sources (SwiftUI)
     TokenStore.swift               Keychain-backed TokenStoring
-    Views/                         Overview / Usage / Trend (Swift Charts) / Settings / Login (WKWebView)
+    BackgroundRefreshService.swift BGAppRefreshTask scheduling + handler
+    Views/                         Overview / Usage / Trend (Swift Charts) / Settings / Login (WKWebView + in-app OAuth popups)
+    Assets.xcassets                AppIcon (1024, whale-girl flattened on deep-blue background)
   DeepSeekMeter.xcodeproj          Xcode project (local package dependency on DeepSeekMeterCore)
+  Info.plist                       App Info.plist (UIBackgroundModes fetch + BGTaskSchedulerPermittedIdentifiers)
 ```
 
 ## 🚀 Build & Test
@@ -50,10 +53,10 @@ xcodebuild -project ios/DeepSeekMeter.xcodeproj -scheme DeepSeekMeter \
   CODE_SIGNING_ALLOWED=NO build
 ```
 
-## ⚠️ Known limitations (M3)
+## ⚠️ Known limitations (M4)
 
-- The login page's `window.open` popups (some OAuth/QR flows) are not hosted in-app yet and fall back to the system browser; regular password / in-page QR login works, and the manual-paste fallback covers the rest. Fix planned for M4 (in-app popup WKWebView layer sharing the same data store).
-- Background refresh relies on the foreground timer + pull-to-refresh; BGAppRefreshTask is planned for M4.
+- Background refresh uses `BGAppRefreshTask` (system-scheduled, best-effort — not guaranteed). The reliable paths are foreground refresh (on open, pull-to-refresh, foreground timer).
+- TestFlight / App Store distribution requires an Apple Developer Program account (decision point D1 in MOBILE-PLAN.md).
 
 ## 🔒 Privacy
 

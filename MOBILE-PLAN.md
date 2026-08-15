@@ -3,7 +3,7 @@
 > 本文档是 iOS / Android 移动端的**规划与实施方案**，供维护者评审后按里程碑执行。
 > 目标：与 macOS / Windows 版功能对齐，延续「平行实现 + 零第三方业务依赖 + 隐私承诺」的项目基因。
 
-**进度**：M1 骨架 ✅（2026-08，ios/ 目录、核心包、Xcode 工程空壳、CI ios-build、.gitignore、AGENTS.md 红线适配）｜ M2 核心包 + 自测 ✅（80 项断言全绿，退出码 0）｜ M3 App 主体代码 ✅（AppModel 状态机 + Keychain + WKWebView 登录 + 四 Tab，状态机已本地自测；App 层待真机/CI 验证）｜ M4-M5 / A1-A5 待启动。
+**进度**：M1 骨架 ✅（2026-08，ios/ 目录、核心包、Xcode 工程空壳、CI ios-build、.gitignore、AGENTS.md 红线适配）｜ M2 核心包 + 自测 ✅（80 项断言全绿，退出码 0）｜ M3 App 主体代码 ✅（AppModel 状态机 + Keychain + WKWebView 登录 + 四 Tab，状态机已本地自测；App 层待真机/CI 验证）｜ M4 打磨代码 ✅（BGAppRefreshTask 后台刷新、App 图标、OAuth 弹窗 App 内承接、刷新间隔持久化；TestFlight 待决策点 D1）｜ M5 / A1-A5 待启动。
 
 ---
 
@@ -107,7 +107,7 @@ ios/
 4. OAuth 弹窗（扫码/社交登录）**必须留在 WebView 内**继续（历史教训：跳系统浏览器后 App 永远收不到 Token）。
 5. 兜底：手动粘贴 Token + 校验（对齐 Windows 版 TokenInputDialog）。
 
-**M3 已知限制（M4 处理）**：登录页 window.open 弹窗（部分 OAuth/扫码流程）暂不内嵌承接，会落到系统浏览器；DeepSeek 常规密码/扫码登录在页面内导航不受影响，另有手动粘贴兜底。iOS 端承接方案：LoginWebView 内叠加 popup WKWebView 层（共享 nonPersistent dataStore）。
+**M4 已处理**：登录页 window.open 弹窗在 App 内承接（LoginWebView 容器内叠加共享 nonPersistent dataStore 的 popup WKWebView 覆盖层 + 关闭按钮），不再落到系统浏览器。
 
 **Token 存储 —— Keychain（与 macOS 刻意不同）**：
 - macOS 存 UserDefaults 是因为 ad-hoc 签名下钥匙串每次启动弹密码授权（红线第 2 条的背景）。
@@ -220,7 +220,7 @@ android/
 | **M1 骨架** ✅ | 创建 ios/ 目录、核心包 Package.swift、Xcode 工程空壳、CI ios-build job（空壳构建通过）、.gitignore 补 iOS 产物 | CI 绿；本地核心自测可跑 |
 | **M2 核心** ✅ | 移植 PlatformService/Models/Formatting/MonthUsage/DataStatus + 自测全绿（移植 selftest 用例与样例 JSON，另加 URLProtocol Mock 请求头/错误归一化用例与 AppModel 状态机用例） | 核心自测 80 项断言全绿（退出码 0），覆盖与 macOS selftest 对齐 |
 | **M3 App 主体** ✅（代码） | 登录（WKWebView + 手动兜底 + Keychain）、概览/用量/趋势/设置四 Tab、AppModel 状态机（收进核心包，注入 TokenStoring+URLSession，本地可测） | 状态机 80 项断言自测全绿；App 层待 CI（macos-15 xcodebuild）与真机验证 |
-| **M4 打磨与分发** | 刷新（前台+BGTask+下拉）、错误六态、本地化、图标、隐私说明；TestFlight 内测（需开发者账号，决策点 D1）；处理 M3 已知限制 | TestFlight 可分发 |
+| **M4 打磨与分发** ✅（代码） | 后台刷新（BGAppRefreshTask + 前台 + 下拉）、错误六态、图标（鲸鱼娘扁平化 1024）、OAuth 弹窗 App 内承接、刷新间隔持久化、隐私说明；TestFlight 内测（需开发者账号，决策点 D1） | 代码就绪；TestFlight 待 D1，App 层待 CI/真机验证 |
 | **M4 打磨与分发** | 刷新（前台+BGTask+下拉）、错误六态、本地化、图标、隐私说明；TestFlight 内测（需开发者账号，决策点 D1） | TestFlight 可分发 |
 | **M5 可选增值** | WidgetKit 小组件 + 余额阈值本地通知 | 锁屏可见余额 |
 | **A1–A5** | Android 版同序列（核心 -> App -> 打磨 -> APK/上架 -> 可选小组件） | 与 iOS 功能对齐 |
