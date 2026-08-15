@@ -203,9 +203,24 @@ android/
 
 ### 4.3 功能对齐与里程碑
 
-与 iOS 功能**逐项对齐**（3.5 的四个界面 + 六态数据状态 + 错误文案）；里程碑序列同 iOS（A1 骨架与 CI -> A2 核心与单测 -> A3 登录与主界面 -> A4 打磨与 APK -> A5 可选小组件/上架）。
+与 iOS 功能**逐项对齐**（3.5 的四个界面 + 六态数据状态 + 错误文案）；里程碑序列同 iOS（A1 骨架与 CI -> A2 核心与单测 -> A3 登录与主界面 -> A4 打磨与 APK -> A5 可选小组件/上架）。详见 4.4 的迁移规格。
 
-### 4.4 测试与 CI
+### 4.4 Android 核心迁移规格（Swift -> Kotlin 逐文件映射，A2 实施时直接照此执行）
+
+核心原则：**零第三方依赖**。JSON 用 Android 内置 org.json（设备与 JVM 单测均可用——android.jar 的 mockable 版本含 org.json 真实实现）；网络用 java.net.HttpURLConnection（JDK 自带）；测试沿用仓库「零测试框架」精神（main 函数断言 + 非零退出码），样例 JSON 直接复用 ios selftest 的字符串。
+
+| Swift（ios/DeepSeekMeterCore/） | Kotlin（android/core/src/main/kotlin/） | 说明 |
+| :--- | :--- | :--- |
+| Formatting.swift | Formatting.kt | format() / currencySymbol() 纯函数直译（Kotlin top-level fun）；移植自测第 1、5 节 |
+| PlatformService.swift（含 PlatformError） | PlatformService.kt（含 PlatformException） | HttpURLConnection 封装；错误归一化为 PlatformException（中文 message，40002/40003 视为过期）；请求头一致（UA 用 Android 移动端、Authorization Bearer、Referer/Origin）；4 个接口签名与 URL 参数完全一致；网络层抽象为 interface（JVM 测试注入 stub，对应 iOS 的 URLSession 可注入） |
+| Models.swift | Models.kt | data class：PlatformEnvelope/BizWrapper 解包、APIKeyAmount/Cost 模型、UserSummary、MonthUsage 聚合（UTC+8 口径，MonthUsage.aggregated 逻辑逐行对应）、DataStatus + dataStatus()；JSON 用 org.json 手写映射（不用 kotlinx.serialization——第三方） |
+| TokenStoring.swift | TokenStore.kt（interface） | 核心只依赖接口；Android 实现 KeystoreTokenStore：Keystore AES/GCM 加密密文存 SharedPreferences（对应 KeychainTokenStore / DPAPI TokenProtector 语义；解密失败按「需要重新登录」） |
+| AppModel.swift | AppModel.kt（ViewModel + StateFlow） | 注入 TokenStore + PlatformService 接口；前台轮询用协程（定时刷新 15s~10min）；savePlatformToken 校验流程、performRefresh、clearPlatformToken 逐方法对应；状态机自测第 12 节移植 |
+| 自测（Selftest 第 1~12 节） | core 自测（main 断言） | 每个 Swift 断言一一对应到 Kotlin（80 项）；样例 JSON 字符串直接复用；网络 stub 用接口注入 |
+
+里程碑 A2 验收：Kotlin 核心编译通过 + 80 项断言移植全绿；A3 用 Compose 实现四 Tab 与 WebView 登录（JS 提取逻辑从 LoginView.swift 直译）。
+
+### 4.5 测试与 CI
 
 - 核心：JVM 单元测试（JUnit，Google 随 SDK 分发，视同平台工具；若坚持零测试框架可用纯 main 断言，决策点 D5）。
 - CI：android-build job（ubuntu + JDK 17 + Gradle）：./gradlew :core:test :app:assembleDebug + 上传 APK artifact。
@@ -223,7 +238,7 @@ android/
 | **M4 打磨与分发** ✅（代码） | 后台刷新（BGAppRefreshTask + 前台 + 下拉）、错误六态、图标（鲸鱼娘扁平化 1024）、OAuth 弹窗 App 内承接、刷新间隔持久化、隐私说明；TestFlight 内测（需开发者账号，决策点 D1） | 代码就绪；TestFlight 待 D1，App 层待 CI/真机验证 |
 | **M4 打磨与分发** | 刷新（前台+BGTask+下拉）、错误六态、本地化、图标、隐私说明；TestFlight 内测（需开发者账号，决策点 D1） | TestFlight 可分发 |
 | **M5 可选增值** ✅（部分） | 余额阈值本地通知（NotificationService，设置页开关 + 刷新后检测，纯本地无推送）；WidgetKit 小组件**待 M1-M4 的 CI/真机验证通过后追加**（需给工程加第二个 target，不宜叠加在未验证的工程上） | 通知代码就绪；小组件待工程验证后实施 |
-| **A1–A5** | Android 版同序列（核心 -> App -> 打磨 -> APK/上架 -> 可选小组件） | 与 iOS 功能对齐 |
+| **A1–A5** | Android 版同序列（核心 -> App -> 打磨 -> APK/上架 -> 可选小组件）；核心迁移规格见 4.5，iOS 自测用例与样例 JSON 直接复用 | 与 iOS 功能对齐 |
 
 **推荐顺序**：iOS 先行（与现有代码同语言，核心共享成本最低）；Android 在 iOS M3 稳定后启动，可复用 iOS 的测试用例清单与文档。
 
