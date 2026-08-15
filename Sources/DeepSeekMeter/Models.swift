@@ -107,10 +107,11 @@ struct APIKeyInfo: Decodable {
     let valid: Bool
 }
 
-/// 按天桶的 token 用量：type -> amount（REQUEST / RESPONSE_TOKEN / PROMPT_CACHE_HIT_TOKEN / PROMPT_CACHE_MISS_TOKEN）
+/// 按天桶的 token 用量：type -> 数值（REQUEST / RESPONSE_TOKEN / PROMPT_CACHE_HIT_TOKEN / PROMPT_CACHE_MISS_TOKEN）
+/// 注意：真实响应中值为 JSON 数字（非字符串），必须用 Double 解码
 struct APIKeyUsageBucket: Decodable {
     let time: Int
-    let usage: [String: String]
+    let usage: [String: Double]
 }
 
 /// 按天桶的费用
@@ -249,8 +250,7 @@ struct MonthUsage: Identifiable {
         for series in amountData?.series ?? [] {
             for bucket in series.buckets where inWindow(bucket.time) {
                 let day = dayString(bucket.time)
-                for (type, amount) in bucket.usage {
-                    let value = Double(amount) ?? 0
+                for (type, value) in bucket.usage {
                     amountByDay[day, default: [:]][series.model, default: [:]][type, default: 0] += value
                     amountByModel[series.model, default: [:]][type, default: 0] += value
                 }
