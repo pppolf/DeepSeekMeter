@@ -2,7 +2,7 @@
 
 DeepSeekMeter 的 **iOS 版**（开发中）：在 iPhone 上实时查看 DeepSeek 账户余额、消费与 Token 用量——与 [macOS 版](../README.zh-CN.md) 和 [Windows 版](../windows/README.md) 功能对齐，使用同一套平台接口契约。
 
-> 总体规划（里程碑、决策点、红线适配）见 [MOBILE-PLAN.md](../MOBILE-PLAN.md)。当前进度：M1 骨架 ✅ / M2 核心包 + 自测 ✅（82 项断言全绿）/ M3 App 主体代码 ✅ / M4 打磨代码 ✅（BGAppRefreshTask、App 图标、OAuth 弹窗内嵌）/ M5 ✅（余额低阈值本地通知 + WidgetKit 余额小组件）。App 层待真机与 CI 验证；TestFlight 待开发者账号。
+> 总体规划（里程碑、决策点、红线适配）见 [MOBILE-PLAN.md](../MOBILE-PLAN.md)。当前进度：M1 骨架 ✅ / M2 核心包 + 自测 ✅（82 项断言全绿）/ M3 App 主体 ✅ / M4 打磨 ✅ / M5 ✅（通知 + WidgetKit 小组件）。**本地模拟器验证通过**（Xcode 26.6 + iOS 26.5：构建 + 运行 + 截图，见 [screenshots/simulator-first-run.png](screenshots/simulator-first-run.png)）；真机与 TestFlight 待开发者账号。
 
 ## ✨ 目标功能
 
@@ -56,6 +56,12 @@ xcodebuild -project ios/DeepSeekMeter.xcodeproj -scheme DeepSeekMeter \
   -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
   CODE_SIGNING_ALLOWED=NO build
 ```
+
+## ✅ 本地验证（2026-08-15）
+
+- Xcode 26.6（iOS 26.5 SDK）构建通过：**DeepSeekMeter.app 与 DeepSeekMeterWidget.appex 均编译成功**（App + 小组件扩展 + 内嵌 PlugIns）。
+- App 已安装并在 **iPhone 17 模拟器**运行，截图：[simulator-first-run.png](screenshots/simulator-first-run.png)。
+- 首次真实构建发现并修复了 2 处盲写问题（Xcode 26 后台任务 API 签名变化；带标签元组兜底）。
 
 ## ⚠️ M5 已知限制
 

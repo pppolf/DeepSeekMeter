@@ -3,7 +3,7 @@
 > 本文档是 iOS / Android 移动端的**规划与实施方案**，供维护者评审后按里程碑执行。
 > 目标：与 macOS / Windows 版功能对齐，延续「平行实现 + 零第三方业务依赖 + 隐私承诺」的项目基因。
 
-**进度**：M1 骨架 ✅（2026-08，ios/ 目录、核心包、Xcode 工程空壳、CI ios-build、.gitignore、AGENTS.md 红线适配）｜ M2 核心包 + 自测 ✅（80 项断言全绿，退出码 0）｜ M3 App 主体代码 ✅（AppModel 状态机 + Keychain + WKWebView 登录 + 四 Tab，状态机已本地自测；App 层待真机/CI 验证）｜ M4 打磨代码 ✅（BGAppRefreshTask 后台刷新、App 图标、OAuth 弹窗 App 内承接、刷新间隔持久化；TestFlight 待决策点 D1）｜ M5 ✅（余额低阈值本地通知 + WidgetKit 余额小组件，快照驱动、不共享 Token）｜ A1-A5 待启动（规划见第 4 节）。
+**进度**：M1 骨架 ✅｜ M2 核心包 + 自测 ✅（82 项断言全绿）｜ M3 App 主体代码 ✅｜ M4 打磨代码 ✅｜ M5 ✅（通知 + WidgetKit 小组件）｜ **本地模拟器验证 ✅（2026-08-15，Xcode 26.6 + iOS 26.5：App 与 Widget 真实编译通过、App 在模拟器运行并截图，修复了 2 处盲写编译错误）**｜ 真机/TestFlight/上架待决策点 D1 与用户设备｜ A1-A5 待启动（规划见第 4 节）。
 
 ---
 
@@ -235,7 +235,7 @@ android/
 | :--- | :--- | :--- |
 | **M1 骨架** ✅ | 创建 ios/ 目录、核心包 Package.swift、Xcode 工程空壳、CI ios-build job（空壳构建通过）、.gitignore 补 iOS 产物 | CI 绿；本地核心自测可跑 |
 | **M2 核心** ✅ | 移植 PlatformService/Models/Formatting/MonthUsage/DataStatus + 自测全绿（移植 selftest 用例与样例 JSON，另加 URLProtocol Mock 请求头/错误归一化用例与 AppModel 状态机用例） | 核心自测 80 项断言全绿（退出码 0），覆盖与 macOS selftest 对齐 |
-| **M3 App 主体** ✅（代码） | 登录（WKWebView + 手动兜底 + Keychain）、概览/用量/趋势/设置四 Tab、AppModel 状态机（收进核心包，注入 TokenStoring+URLSession，本地可测） | 状态机 80 项断言自测全绿；App 层待 CI（macos-15 xcodebuild）与真机验证 |
+| **M3 App 主体** ✅ | 登录（WKWebView + 手动兜底 + Keychain）、概览/用量/趋势/设置四 Tab、AppModel 状态机（收进核心包，注入 TokenStoring+URLSession，本地可测） | 状态机 82 项断言全绿；本地模拟器构建+运行+截图验证通过（Xcode 26.6） |
 | **M4 打磨与分发** ✅（代码） | 后台刷新（BGAppRefreshTask + 前台 + 下拉）、错误六态、图标（鲸鱼娘扁平化 1024）、OAuth 弹窗 App 内承接、刷新间隔持久化、隐私说明；TestFlight 内测（需开发者账号，决策点 D1） | 代码就绪；TestFlight 待 D1，App 层待 CI/真机验证 |
 | **M4 打磨与分发** | 刷新（前台+BGTask+下拉）、错误六态、本地化、图标、隐私说明；TestFlight 内测（需开发者账号，决策点 D1） | TestFlight 可分发 |
 | **M5 可选增值** ✅ | 余额阈值本地通知（NotificationService，设置页开关 + 刷新后检测，纯本地无推送）；WidgetKit 余额小组件（DeepSeekMeterWidget 扩展 target，**快照驱动**：App 刷新后写入 App Group UserDefaults，小组件只读展示、不联网、不共享 Token；App Group 标识 group.com.deepseek.meter） | 代码与工程结构就绪；待 CI/真机验证 |

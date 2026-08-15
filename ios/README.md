@@ -2,7 +2,7 @@
 
 The **iOS version** of DeepSeekMeter (in development): view your DeepSeek account balance, spending and token usage on your iPhone — feature-aligned with the [macOS](../README.md) and [Windows](../windows/README.md) versions, using the same platform API contract.
 
-> 总体规划（里程碑、决策点、红线适配）见 [MOBILE-PLAN.md](../MOBILE-PLAN.md)。当前进度：M1 骨架 ✅ / M2 核心包 + 自测 ✅（82 项断言全绿）/ M3 App 主体代码 ✅ / M4 打磨代码 ✅（BGAppRefreshTask、App 图标、OAuth 弹窗内嵌）/ M5 ✅（余额低阈值本地通知 + WidgetKit 余额小组件）。App 层待真机与 CI 验证；TestFlight 待开发者账号。
+> 总体规划（里程碑、决策点、红线适配）见 [MOBILE-PLAN.md](../MOBILE-PLAN.md)。当前进度：M1 骨架 ✅ / M2 核心包 + 自测 ✅（82 项断言全绿）/ M3 App 主体 ✅ / M4 打磨 ✅ / M5 ✅（通知 + WidgetKit 小组件）。**本地模拟器验证通过**（Xcode 26.6 + iOS 26.5：构建 + 运行 + 截图，见 [screenshots/simulator-first-run.png](screenshots/simulator-first-run.png)）；真机与 TestFlight 待开发者账号。
 
 ## ✨ Features (target)
 
@@ -56,6 +56,12 @@ xcodebuild -project ios/DeepSeekMeter.xcodeproj -scheme DeepSeekMeter \
   -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
   CODE_SIGNING_ALLOWED=NO build
 ```
+
+## ✅ Local verification (2026-08-15)
+
+- Built with Xcode 26.6 (iOS 26.5 SDK): **DeepSeekMeter.app + DeepSeekMeterWidget.appex both compile** (main app + widget extension + embedded PlugIns).
+- App installed and running in the **iPhone 17 simulator**; screenshot: [simulator-first-run.png](screenshots/simulator-first-run.png).
+- Two blind-written compile issues were found and fixed during this first real build (background-task API signature change in Xcode 26; labeled tuple fallback).
 
 ## ⚠️ Known limitations (M5)
 
