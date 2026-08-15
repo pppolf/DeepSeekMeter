@@ -1,0 +1,57 @@
+# DeepSeekMeter · iOS 版 🐳
+
+DeepSeekMeter 的 **iOS 版**（开发中）：在 iPhone 上实时查看 DeepSeek 账户余额、消费与 Token 用量——与 [macOS 版](../README.zh-CN.md) 和 [Windows 版](../windows/README.md) 功能对齐，使用同一套平台接口契约。
+
+> 总体规划（里程碑、决策点、红线适配）见 [MOBILE-PLAN.md](../MOBILE-PLAN.md)。当前进度：M1 骨架 ✅ / M2 核心包 + 自测 ✅ / M3 App 主体（开发中）。
+
+## ✨ 目标功能
+
+- 💰 **余额卡片**（概览 Tab；低于 10 变橙、低于 1 变红，与桌面菜单栏配色语义一致）
+- 🔑 **一键登录**：内嵌官方登录页（WKWebView）+ 自动提取 Token；手动粘贴兜底
+- 📊 **用量明细**：本月/今日费用、请求数、输出 Token、缓存命中，按模型拆分
+- 📈 **Token 趋势**：本月按天柱状图（输出 / 缓存命中 / 总量可切换）
+- ⏱️ **刷新**：进入即刷 + 下拉刷新 + 前台定时器（15s~10min）；BGAppRefreshTask 尽力而为的后台预刷新
+- 🔔（可选里程碑）WidgetKit 余额小组件 + 余额低阈值本地通知
+
+## 📋 环境要求
+
+- Xcode 16+（工程使用 Xcode 16 同步文件夹格式）
+- 部署目标 iOS 17.0+
+- 零第三方依赖（仅系统框架）
+
+## 🛠 结构
+
+```
+ios/
+  DeepSeekMeterCore/              共享核心 Swift Package（零第三方依赖）
+    Sources/DeepSeekMeterCore/    PlatformService / Models / Formatting / TokenStoring
+    Sources/DeepSeekMeterCoreSelftest/  轻量自测（无需 XCTest）
+  DeepSeekMeter/                  iOS App 源码（SwiftUI）
+  DeepSeekMeter.xcodeproj         Xcode 工程（本地包依赖 DeepSeekMeterCore）
+```
+
+## 🚀 构建与测试
+
+核心自测（macOS 上直接跑，无需 Xcode）：
+
+```bash
+swift run --package-path ios/DeepSeekMeterCore DeepSeekMeterCoreSelftest
+```
+
+App（需要 Xcode 16）：
+
+```bash
+open ios/DeepSeekMeter.xcodeproj          # Xcode 中运行
+# 或命令行无签名构建：
+xcodebuild -project ios/DeepSeekMeter.xcodeproj -scheme DeepSeekMeter \
+  -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
+  CODE_SIGNING_ALLOWED=NO build
+```
+
+## 🔒 隐私
+
+与桌面版一致：所有数据来自 DeepSeek 官方平台接口，使用**你自己的登录态**，不向任何第三方上报。iOS 上 Token 存 **Keychain**（macOS 版存 UserDefaults 仅因 ad-hoc 签名；iOS App 有正式签名，钥匙串不会弹窗）。
+
+## 🖼️ 图标素材
+
+计划沿用 windows/assets 的鲸鱼娘金钱主题素材（AI 为本项目生成，并非 DeepSeek 官方素材），见 [ATTRIBUTION](../windows/assets/ATTRIBUTION.zh-CN.md)。
