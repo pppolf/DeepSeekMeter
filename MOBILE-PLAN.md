@@ -3,7 +3,7 @@
 > 本文档是 iOS / Android 移动端的**规划与实施方案**，供维护者评审后按里程碑执行。
 > 目标：与 macOS / Windows 版功能对齐，延续「平行实现 + 零第三方业务依赖 + 隐私承诺」的项目基因。
 
-**进度**：M1 骨架 ✅（2026-08，ios/ 目录、核心包、Xcode 工程空壳、CI ios-build、.gitignore、AGENTS.md 红线适配）｜ M2 核心包 + 自测 ✅（80 项断言全绿，退出码 0）｜ M3 App 主体代码 ✅（AppModel 状态机 + Keychain + WKWebView 登录 + 四 Tab，状态机已本地自测；App 层待真机/CI 验证）｜ M4 打磨代码 ✅（BGAppRefreshTask 后台刷新、App 图标、OAuth 弹窗 App 内承接、刷新间隔持久化；TestFlight 待决策点 D1）｜ M5 / A1-A5 待启动。
+**进度**：M1 骨架 ✅（2026-08，ios/ 目录、核心包、Xcode 工程空壳、CI ios-build、.gitignore、AGENTS.md 红线适配）｜ M2 核心包 + 自测 ✅（80 项断言全绿，退出码 0）｜ M3 App 主体代码 ✅（AppModel 状态机 + Keychain + WKWebView 登录 + 四 Tab，状态机已本地自测；App 层待真机/CI 验证）｜ M4 打磨代码 ✅（BGAppRefreshTask 后台刷新、App 图标、OAuth 弹窗 App 内承接、刷新间隔持久化；TestFlight 待决策点 D1）｜ M5 部分 ✅（余额低阈值本地通知）；WidgetKit 小组件待 App 层 CI 验证通过后追加｜ A1-A5 待启动（规划见第 4 节）。
 
 ---
 
@@ -222,7 +222,7 @@ android/
 | **M3 App 主体** ✅（代码） | 登录（WKWebView + 手动兜底 + Keychain）、概览/用量/趋势/设置四 Tab、AppModel 状态机（收进核心包，注入 TokenStoring+URLSession，本地可测） | 状态机 80 项断言自测全绿；App 层待 CI（macos-15 xcodebuild）与真机验证 |
 | **M4 打磨与分发** ✅（代码） | 后台刷新（BGAppRefreshTask + 前台 + 下拉）、错误六态、图标（鲸鱼娘扁平化 1024）、OAuth 弹窗 App 内承接、刷新间隔持久化、隐私说明；TestFlight 内测（需开发者账号，决策点 D1） | 代码就绪；TestFlight 待 D1，App 层待 CI/真机验证 |
 | **M4 打磨与分发** | 刷新（前台+BGTask+下拉）、错误六态、本地化、图标、隐私说明；TestFlight 内测（需开发者账号，决策点 D1） | TestFlight 可分发 |
-| **M5 可选增值** | WidgetKit 小组件 + 余额阈值本地通知 | 锁屏可见余额 |
+| **M5 可选增值** ✅（部分） | 余额阈值本地通知（NotificationService，设置页开关 + 刷新后检测，纯本地无推送）；WidgetKit 小组件**待 M1-M4 的 CI/真机验证通过后追加**（需给工程加第二个 target，不宜叠加在未验证的工程上） | 通知代码就绪；小组件待工程验证后实施 |
 | **A1–A5** | Android 版同序列（核心 -> App -> 打磨 -> APK/上架 -> 可选小组件） | 与 iOS 功能对齐 |
 
 **推荐顺序**：iOS 先行（与现有代码同语言，核心共享成本最低）；Android 在 iOS M3 稳定后启动，可复用 iOS 的测试用例清单与文档。

@@ -2,7 +2,7 @@
 
 The **iOS version** of DeepSeekMeter (in development): view your DeepSeek account balance, spending and token usage on your iPhone — feature-aligned with the [macOS](../README.md) and [Windows](../windows/README.md) versions, using the same platform API contract.
 
-> 总体规划（里程碑、决策点、红线适配）见 [MOBILE-PLAN.md](../MOBILE-PLAN.md)。当前进度：M1 骨架 ✅ / M2 核心包 + 自测 ✅（80 项断言全绿）/ M3 App 主体代码 ✅ / M4 打磨代码 ✅（BGAppRefreshTask、App 图标、OAuth 弹窗内嵌；TestFlight 待开发者账号）/ M5 待启动。App 层待真机与 CI 验证。
+> 总体规划（里程碑、决策点、红线适配）见 [MOBILE-PLAN.md](../MOBILE-PLAN.md)。当前进度：M1 骨架 ✅ / M2 核心包 + 自测 ✅（80 项断言全绿）/ M3 App 主体代码 ✅ / M4 打磨代码 ✅（BGAppRefreshTask、App 图标、OAuth 弹窗内嵌）/ M5 部分 ✅（余额低阈值本地通知；WidgetKit 待工程验证后追加）。App 层待真机与 CI 验证；TestFlight 待开发者账号。
 
 ## ✨ Features (target)
 
@@ -29,6 +29,7 @@ ios/
   DeepSeekMeter/                   iOS app sources (SwiftUI)
     TokenStore.swift               Keychain-backed TokenStoring
     BackgroundRefreshService.swift BGAppRefreshTask scheduling + handler
+    NotificationService.swift       Low-balance local notification (pure local, no push)
     Views/                         Overview / Usage / Trend (Swift Charts) / Settings / Login (WKWebView + in-app OAuth popups)
     Assets.xcassets                AppIcon (1024, whale-girl flattened on deep-blue background)
   DeepSeekMeter.xcodeproj          Xcode project (local package dependency on DeepSeekMeterCore)

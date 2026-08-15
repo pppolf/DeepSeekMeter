@@ -2,7 +2,7 @@
 
 DeepSeekMeter 的 **iOS 版**（开发中）：在 iPhone 上实时查看 DeepSeek 账户余额、消费与 Token 用量——与 [macOS 版](../README.zh-CN.md) 和 [Windows 版](../windows/README.md) 功能对齐，使用同一套平台接口契约。
 
-> 总体规划（里程碑、决策点、红线适配）见 [MOBILE-PLAN.md](../MOBILE-PLAN.md)。当前进度：M1 骨架 ✅ / M2 核心包 + 自测 ✅（80 项断言全绿）/ M3 App 主体代码 ✅ / M4 打磨代码 ✅（BGAppRefreshTask、App 图标、OAuth 弹窗内嵌；TestFlight 待开发者账号）/ M5 待启动。App 层待真机与 CI 验证。
+> 总体规划（里程碑、决策点、红线适配）见 [MOBILE-PLAN.md](../MOBILE-PLAN.md)。当前进度：M1 骨架 ✅ / M2 核心包 + 自测 ✅（80 项断言全绿）/ M3 App 主体代码 ✅ / M4 打磨代码 ✅（BGAppRefreshTask、App 图标、OAuth 弹窗内嵌）/ M5 部分 ✅（余额低阈值本地通知；WidgetKit 待工程验证后追加）。App 层待真机与 CI 验证；TestFlight 待开发者账号。
 
 ## ✨ 目标功能
 
@@ -29,6 +29,7 @@ ios/
   DeepSeekMeter/                  iOS App 源码（SwiftUI）
     TokenStore.swift              Keychain 实现 TokenStoring
     BackgroundRefreshService.swift BGAppRefreshTask 调度与处理
+    NotificationService.swift       余额低阈值本地通知（纯本地，无推送）
     Views/                        概览 / 用量 / 趋势（Swift Charts）/ 设置 / 登录（WKWebView + 弹窗内嵌）
     Assets.xcassets               AppIcon（1024，鲸鱼娘深蓝底扁平化）
   DeepSeekMeter.xcodeproj         Xcode 工程（本地包依赖 DeepSeekMeterCore）
