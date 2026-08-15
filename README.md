@@ -60,6 +60,8 @@ pwsh Scripts/publish-windows.ps1   # produce windows/publish/DeepSeekMeter-win-x
 
 See [`windows/README.md`](windows/README.md) for details.
 
+> The Windows whale-girl money-themed icon is AI-generated for this project, not an official DeepSeek icon or character asset. DeepSeek names, trademarks, and official brand assets belong to their respective owners (see [`windows/assets/ATTRIBUTION.md`](windows/assets/ATTRIBUTION.md)).
+
 ## 🚀 Quick Start
 
 1. Launch the app — the 🐳 icon appears in the menu bar

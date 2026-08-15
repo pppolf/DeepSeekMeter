@@ -89,13 +89,17 @@ dotnet run --project tests/DeepSeekMeter.Selftest -c Release   # 运行自测
 ## 🔒 隐私与数据
 
 - 所有数据均来自 DeepSeek 官方平台接口（`get_user_summary` / `usage/amount` / `usage/cost`），使用你自己的登录态获取，**不会发送到任何第三方**
-- Token 只保存在本机 `%APPDATA%\DeepSeekMeter\settings.json`（对应 macOS 的偏好文件）；WebView2 登录数据在 `%LOCALAPPDATA%\DeepSeekMeter\WebView2`
+- Token 使用 **Windows DPAPI 加密**（绑定当前 Windows 用户）后保存在本机 `%APPDATA%\DeepSeekMeter\settings.json`；WebView2 登录数据在 `%LOCALAPPDATA%\DeepSeekMeter\WebView2`
 - Token 用量数据与控制台可能有数分钟延迟
 
 ## 📦 依赖说明
 
 - **WPF / WinForms（NotifyIcon）**：.NET 平台自带组件，非第三方包
 - **Microsoft.Web.WebView2**：微软官方 Web 控件包（仅互操作层；WebView2 Runtime 随系统预装）。这是 Windows 侧实现「一键登录」所需的唯一 NuGet 依赖，理由已在 PR 中说明；仓库 Swift 侧保持零第三方依赖不变。
+
+## 🖼️ 图标素材
+
+Windows 端鲸鱼娘金钱主题图标由 **AI 为本项目生成**，并非 DeepSeek 官方图标或官方角色素材。DeepSeek 相关名称、商标及官方品牌资产归其权利人所有。详见 [`assets/ATTRIBUTION.md`](assets/ATTRIBUTION.md)。
 
 ## ❓ 常见问题
 
