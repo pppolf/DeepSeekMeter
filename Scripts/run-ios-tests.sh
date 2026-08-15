@@ -4,14 +4,17 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+echo "==> 核心文件漂移检查（macOS 侧改动需同步到 iOS 核心包）"
+bash Scripts/check-core-drift.sh
+
 echo "==> iOS 核心包自测"
 swift run --package-path ios/DeepSeekMeterCore DeepSeekMeterCoreSelftest
 
 echo "==> iOS 工程结构校验（静态，无需 Xcode）"
 python3 Scripts/check-ios-project.py
 
-# 注意：CLT 环境下也有 xcodebuild 存根（会报错），必须用 -version 探测真实 Xcode
-if xcodebuild -version >/dev/null 2>&1; then
+# 探测真实 Xcode：xcode-select 指向 /Applications/Xcode.app（而非 CommandLineTools）
+if xcode-select -p 2>/dev/null | grep -q "/Applications/Xcode"; then
   echo "==> 构建 iOS App（模拟器，无签名）"
   xcodebuild -project ios/DeepSeekMeter.xcodeproj -scheme DeepSeekMeter \
     -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \

@@ -87,8 +87,12 @@ for oid, o in objs.items():
     if o.get("isa") == "XCBuildConfiguration":
         bs = o.get("buildSettings", {})
         ip = bs.get("INFOPLIST_FILE")
-        if ip and not os.path.isfile(os.path.join(root, ip)):
-            errors.append(f"INFOPLIST_FILE 不存在: {ip}")
+        if ip:
+            full = os.path.realpath(os.path.join(root, ip))
+            if not full.startswith(os.path.realpath(root) + os.sep):
+                errors.append(f"INFOPLIST_FILE 越界: {ip}")
+            elif not os.path.isfile(full):
+                errors.append(f"INFOPLIST_FILE 不存在: {ip}")
         icon = bs.get("ASSETCATALOG_COMPILER_APPICON_NAME")
         if icon:
             ac = os.path.join(root, f"DeepSeekMeter/Assets.xcassets/{icon}.appiconset")
@@ -127,9 +131,8 @@ for oid, o in objs.items():
         bs = o.get("buildSettings", {})
         ip = bs.get("INFOPLIST_FILE")
         if ip and "Widget" in str(ip) and os.path.isfile(os.path.join(root, ip)):
-            import subprocess as sp
-            out = sp.run(["plutil", "-convert", "json", "-o", "-", os.path.join(root, ip)],
-                         capture_output=True, text=True)
+            out = subprocess.run(["plutil", "-convert", "json", "-o", "-", os.path.join(root, ip)],
+                                 capture_output=True, text=True)
             if out.returncode == 0:
                 info = json.loads(out.stdout)
                 ext = info.get("NSExtension", {}).get("NSExtensionPointIdentifier")
@@ -140,9 +143,20 @@ for oid, o in objs.items():
 for t in p.get("targets", []):
     target = objs.get(t, {})
     if target.get("productType") == "com.apple.product-type.application":
-        has_embed = any(objs.get(ph, {}).get("isa") == "PBXCopyFilesBuildPhase" for ph in target.get("buildPhases", []))
-        if not has_embed:
+        embed_phases = [objs.get(ph) for ph in target.get("buildPhases", [])
+                        if objs.get(ph, {}).get("isa") == "PBXCopyFilesBuildPhase"]
+        if not embed_phases:
             errors.append(f"应用 target {t} 缺少 Embed App Extensions 阶段")
+        else:
+            embedded = []
+            for ph in embed_phases:
+                for bf in ph.get("files", []):
+                    b = objs.get(bf, {})
+                    fr = b.get("fileRef")
+                    if fr and objs.get(fr, {}).get("path") == "DeepSeekMeterWidget.appex":
+                        embedded.append(bf)
+            if not embedded:
+                errors.append(f"应用 target {t} 的 Embed 阶段未包含 DeepSeekMeterWidget.appex")
         if not target.get("dependencies"):
             errors.append(f"应用 target {t} 没有 target 依赖（应依赖 Widget 扩展）")
 

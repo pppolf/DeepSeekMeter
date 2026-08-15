@@ -36,14 +36,30 @@ if ! xcrun simctl list runtimes | grep -qi "iOS"; then
   echo "❌ 未安装 iOS 模拟器运行时。请先下载（Xcode 菜单 Settings → Components，或命令行：xcodebuild -downloadPlatform iOS，约 7GB）"
   exit 1
 fi
-# 选设备：优先环境变量，否则取第一个可用 iPhone
-if [ -n "${SIMULATOR_NAME:-}" ]; then
-  DEVICE_ID=$(xcrun simctl list devices available | grep "$SIMULATOR_NAME" | head -1 | sed -E 's/.*\(([0-9A-F-]{36})\).*/\1/')
-else
-  DEVICE_ID=$(xcrun simctl list devices available | grep "iPhone" | head -1 | sed -E 's/.*\(([0-9A-F-]{36})\).*/\1/')
-fi
+# 选设备：优先环境变量，否则取第一个可用 iPhone（用 JSON 输出解析，避免文本格式漂移）
+DEVICE_ID=$(SIM_NAME="${SIMULATOR_NAME:-}" python3 -c '
+import json, subprocess, os, sys
+name_filter = os.environ.get("SIM_NAME", "") or None
+out = subprocess.run(["xcrun", "simctl", "list", "devices", "available", "-j"],
+                     capture_output=True, text=True)
+try:
+    data = json.loads(out.stdout)
+except json.JSONDecodeError:
+    sys.exit(1)
+for runtime, devices in data.get("devices", {}).items():
+    for d in devices:
+        if not d.get("isAvailable", False):
+            continue
+        dname = d.get("name", "")
+        if name_filter:
+            if name_filter.lower() in dname.lower():
+                print(d["udid"]); sys.exit(0)
+        elif dname.startswith("iPhone"):
+            print(d["udid"]); sys.exit(0)
+sys.exit(1)
+')
 if [ -z "$DEVICE_ID" ]; then
-  echo "❌ 无可用 iPhone 模拟器。请在 Xcode 中创建一个模拟器（Window → Devices and Simulators）"
+  echo "❌ 无可用 iPhone 模拟器。请在 Xcode 中创建一个模拟器（Window -> Devices and Simulators）"
   exit 1
 fi
 echo "  使用设备: $DEVICE_ID"
