@@ -343,6 +343,70 @@ Task {
         check(false, "异常类型不符：\(error)")
     }
 
+    // 12. AppModel 状态机（内存 TokenStore + URLProtocol Mock 路由 4 个接口）
+    final class MemoryTokenStore: TokenStoring {
+        private var stored: String?
+        func loadToken() -> String? { stored }
+        func saveToken(_ token: String) { stored = token }
+        func clearToken() { stored = nil }
+    }
+    let currentUserJSON = """
+{"code":0,"msg":"","data":{"biz_code":0,"biz_msg":"","biz_data":{"id":"u_1","email":"dev@example.com","currency":"USD"}}}
+"""
+    let expiredJSON = """
+{"code":0,"msg":"","data":{"biz_code":40002,"biz_msg":"token 失效","biz_data":null}}
+"""
+    func routerJSON(_ expired: Bool) -> ((URLRequest) throws -> (HTTPURLResponse, Data)) {
+        { request in
+            let path = request.url?.path ?? ""
+            let body: String
+            switch path {
+            case "/auth-api/v0/users/current": body = currentUserJSON
+            case "/api/v0/users/get_user_summary": body = summaryJSON
+            case "/api/v0/usage/by_api_key/amount": body = expired ? expiredJSON : byKeyAmountJSON
+            case "/api/v0/usage/by_api_key/cost": body = byKeyCostJSON
+            default: body = "{\"code\":404,\"msg\":\"not found\"}"
+            }
+            let resp = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+            return (resp, Data(body.utf8))
+        }
+    }
+
+    let memStore = MemoryTokenStore()
+    await Task { @MainActor in
+        StubURLProtocol.handler = routerJSON(false)
+        let model = AppModel(platformService: PlatformService(session: stubSession()), tokenStore: memStore)
+        check(model.status == .notLoggedIn, "初始未登录")
+        check(model.token == nil, "初始无 Token")
+
+        let ok = await model.savePlatformToken("test-token-abc")
+        check(ok, "savePlatformToken 校验成功")
+        check(model.token == "test-token-abc" && memStore.loadToken() == "test-token-abc", "Token 已落盘")
+        check(model.platformUserName == "dev@example.com", "登录邮箱")
+        check(model.currency == "CNY", "币种跟随钱包（余额接口覆盖用户接口）")
+        check(model.status == .fresh, "登录后有数据为 fresh")
+        check(abs((model.lastBalance?.total ?? 0) - 40.24923164) < 0.0001, "余额解析")
+        check(abs((model.monthUsage?.totalCost ?? 0) - 4.0) < 0.001, "本月费用聚合")
+        check(model.monthUsage?.totalRequests == 7, "本月请求聚合")
+
+        // 刷新间隔选项
+        model.setRefreshInterval(30)
+        check(model.refreshInterval == 30, "设置 30s 间隔")
+        model.setRefreshInterval(999)
+        check(model.refreshInterval == 30, "非法间隔被忽略")
+
+        // Token 过期：amount 返回 biz_code 40002 -> 标记过期
+        StubURLProtocol.handler = routerJSON(true)
+        await model.performRefresh()
+        check(model.platformTokenExpired, "过期被标记")
+        check(model.status == .tokenExpired, "过期状态优先于旧数据")
+
+        // 退出登录
+        model.clearPlatformToken()
+        check(model.token == nil && memStore.loadToken() == nil, "退出登录清除落盘")
+        check(model.status == .notLoggedIn, "退出后未登录")
+    }.value
+
     if failures > 0 {
         print("\n❌ \(failures) 项未通过")
         exit(1)
