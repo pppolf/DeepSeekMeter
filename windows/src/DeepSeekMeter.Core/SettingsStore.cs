@@ -2,13 +2,14 @@ using System.ComponentModel;
 using System.IO;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace DeepSeekMeter.Core;
 
 /// <summary>
-/// 用户设置：平台 Token + 刷新间隔 + 开机自启。
-/// 持久化到本机 JSON 文件（默认 %APPDATA%\DeepSeekMeter\settings.json），
-/// 对齐 macOS 版 SettingsStore.swift 的 UserDefaults/plist 语义（Token 只存本机、不存钥匙串）。
+/// 用户设置：平台 Token（DPAPI 加密）+ 刷新间隔 + 开机自启。
+/// 持久化到本机 JSON 文件（默认 %APPDATA%\DeepSeekMeter\settings.json）。
+/// 凭据通过原子操作写入：先加密并落盘成功，再更新内存状态，失败不假装成功。
 /// </summary>
 public sealed class SettingsStore : INotifyPropertyChanged
 {
@@ -22,6 +23,9 @@ public sealed class SettingsStore : INotifyPropertyChanged
     private string _platformUserName = "";
     private double _refreshInterval = 60;
     private bool _launchAtLogin;
+
+    /// <summary>构造完成后可读取的启动警告（迁移/解密失败），由应用启动后展示一次，不含 Token。</summary>
+    public string? StartupWarning { get; private set; }
 
     public SettingsStore(string? settingsFilePath = null)
     {
@@ -37,31 +41,13 @@ public sealed class SettingsStore : INotifyPropertyChanged
         return Path.Combine(dir, "settings.json");
     }
 
-    // MARK: - 属性（变更即保存，对齐 didSet 行为）
+    // MARK: - 属性
 
-    public string PlatformToken
-    {
-        get => _platformToken;
-        set
-        {
-            if (_platformToken == value) return;
-            _platformToken = value;
-            OnPropertyChanged();
-            Save();
-        }
-    }
+    /// <summary>平台 Token（内存中的明文，仅用于网络请求；落盘时加密）。</summary>
+    public string PlatformToken => _platformToken;
 
-    public string PlatformUserName
-    {
-        get => _platformUserName;
-        set
-        {
-            if (_platformUserName == value) return;
-            _platformUserName = value;
-            OnPropertyChanged();
-            Save();
-        }
-    }
+    /// <summary>平台用户名（邮箱）。</summary>
+    public string PlatformUserName => _platformUserName;
 
     public double RefreshInterval
     {
@@ -69,9 +55,17 @@ public sealed class SettingsStore : INotifyPropertyChanged
         set
         {
             if (Math.Abs(_refreshInterval - value) < 0.001) return;
+            var previous = _refreshInterval;
             _refreshInterval = value;
-            OnPropertyChanged();
-            Save();
+            if (WriteSettings(_platformToken, _platformUserName, out var error))
+            {
+                OnPropertyChanged();
+            }
+            else
+            {
+                _refreshInterval = previous; // 保存失败回滚，不假装成功
+                SaveFailed?.Invoke(error ?? "设置保存失败");
+            }
         }
     }
 
@@ -81,36 +75,50 @@ public sealed class SettingsStore : INotifyPropertyChanged
         set
         {
             if (_launchAtLogin == value) return;
+            var previous = _launchAtLogin;
             _launchAtLogin = value;
-            OnPropertyChanged();
-            Save();
+            if (WriteSettings(_platformToken, _platformUserName, out var error))
+            {
+                OnPropertyChanged();
+            }
+            else
+            {
+                _launchAtLogin = previous;
+                SaveFailed?.Invoke(error ?? "设置保存失败");
+            }
         }
     }
 
-    public void ClearPlatformToken()
+    // MARK: - 原子凭据操作
+
+    /// <summary>原子保存平台凭据：先加密并落盘成功，再更新内存；失败不改内存并返回脱敏错误。</summary>
+    public bool TrySetPlatformCredentials(string token, string userName, out string? error)
     {
+        error = null;
+        if (!WriteSettings(token, userName, out error)) return false;
+
+        _platformToken = token;
+        _platformUserName = userName;
+        OnPropertyChanged(nameof(PlatformToken));
+        OnPropertyChanged(nameof(PlatformUserName));
+        return true;
+    }
+
+    /// <summary>原子清除平台凭据：先在设置文件移除加密字段成功，再清内存；失败保留一致登录状态。</summary>
+    public bool TryClearPlatformCredentials(out string? error)
+    {
+        error = null;
+        if (!WriteSettings(null, null, out error)) return false;
+
         _platformToken = "";
         _platformUserName = "";
         OnPropertyChanged(nameof(PlatformToken));
         OnPropertyChanged(nameof(PlatformUserName));
-        Save(); // 写空：PlatformTokenProtected 为 null，明文字段不写入
-        // 清理可能残留的临时设置文件（其中也可能含密文）
-        try
-        {
-            var tmp = SettingsFilePath + ".tmp";
-            if (File.Exists(tmp)) File.Delete(tmp);
-        }
-        catch
-        {
-            // 忽略临时文件清理失败
-        }
+        return true;
     }
 
-    /// <summary>设置保存失败时触发（参数为失败原因），供 UI 提示。</summary>
+    /// <summary>设置保存失败时触发（参数为脱敏中文提示）。</summary>
     public event Action<string>? SaveFailed;
-
-    /// <summary>最近一次保存是否成功。</summary>
-    public bool LastSaveSucceeded { get; private set; } = true;
 
     // MARK: - 持久化
 
@@ -142,12 +150,29 @@ public sealed class SettingsStore : INotifyPropertyChanged
             // Token：优先解密新版密文；否则迁移旧明文
             if (!string.IsNullOrEmpty(snap.PlatformTokenProtected))
             {
-                _platformToken = UnprotectToken(snap.PlatformTokenProtected) ?? "";
+                var token = UnprotectToken(snap.PlatformTokenProtected);
+                if (token is null)
+                {
+                    _platformToken = "";
+                    StartupWarning = "本地登录信息无法解密，请重新登录";
+                }
+                else
+                {
+                    _platformToken = token;
+                }
             }
             else if (!string.IsNullOrEmpty(snap.PlatformToken))
             {
-                _platformToken = snap.PlatformToken;
-                MigrateLegacyToken(); // 加密成功后写回密文并删除明文
+                // 旧明文迁移：加密成功落盘后才视为迁移成功；失败保留旧文件
+                if (WriteSettings(snap.PlatformToken, snap.PlatformUserName, out _))
+                {
+                    _platformToken = snap.PlatformToken;
+                }
+                else
+                {
+                    _platformToken = "";
+                    StartupWarning = "本地登录信息迁移失败，请重新登录";
+                }
             }
         }
         catch (Exception ex)
@@ -157,23 +182,51 @@ public sealed class SettingsStore : INotifyPropertyChanged
         }
     }
 
-    /// <summary>旧明文 Token 迁移：加密成功后重新保存（密文替换明文，旧文件在加密失败时不受影响）。</summary>
-    private void MigrateLegacyToken()
+    /// <summary>
+    /// 底层持久化：加密 token（若非空）后原子写入设置文件。返回是否成功及脱敏错误。
+    /// 不修改任何内存字段；.tmp 中只含密文。
+    /// </summary>
+    private bool WriteSettings(string? token, string? userName, out string? error)
     {
+        error = null;
+        string? protectedToken = null;
+        if (!string.IsNullOrEmpty(token))
+        {
+            try
+            {
+                protectedToken = Convert.ToBase64String(TokenProtector.Protect(token));
+            }
+            catch
+            {
+                error = "本地登录信息加密失败，请重试";
+                return false;
+            }
+        }
+
         try
         {
-            Save(); // Save 只写 PlatformTokenProtected，加密失败会抛异常并保留旧文件
+            var dir = Path.GetDirectoryName(SettingsFilePath);
+            if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+            var snap = new Snapshot
+            {
+                PlatformTokenProtected = protectedToken,
+                PlatformUserName = userName,
+                RefreshInterval = _refreshInterval,
+                LaunchAtLogin = _launchAtLogin,
+            };
+            var json = JsonSerializer.Serialize(snap, SnapshotOptions);
+            var tmp = SettingsFilePath + ".tmp";
+            File.WriteAllText(tmp, json);
+            File.Move(tmp, SettingsFilePath, overwrite: true);
+            return true;
         }
-        catch
+        catch (Exception ex)
         {
-            // 加密失败：保留旧明文配置，不破坏；下次仍可重试
+            error = "设置保存失败，请检查磁盘空间或文件权限";
+            // 只记录不含 Token、不含路径敏感信息的可读错误
+            System.Diagnostics.Debug.WriteLine($"[DeepSeekMeter] 设置保存失败：{ex.Message}");
+            return false;
         }
-    }
-
-    private static string? ProtectToken(string token)
-    {
-        if (string.IsNullOrEmpty(token)) return null;
-        return Convert.ToBase64String(TokenProtector.Protect(token));
     }
 
     private static string? UnprotectToken(string base64)
@@ -189,40 +242,10 @@ public sealed class SettingsStore : INotifyPropertyChanged
         }
     }
 
-    private void Save()
-    {
-        try
-        {
-            var dir = Path.GetDirectoryName(SettingsFilePath);
-            if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
-            var snap = new Snapshot
-            {
-                // 不写明文 PlatformToken，只写密文 PlatformTokenProtected
-                PlatformTokenProtected = ProtectToken(_platformToken),
-                PlatformUserName = _platformUserName,
-                RefreshInterval = _refreshInterval,
-                LaunchAtLogin = _launchAtLogin,
-            };
-            var json = JsonSerializer.Serialize(snap, SnapshotOptions);
-            // 原子写入：先写临时文件再替换（.tmp 中只含密文）
-            var tmp = SettingsFilePath + ".tmp";
-            File.WriteAllText(tmp, json);
-            File.Move(tmp, SettingsFilePath, overwrite: true);
-            LastSaveSucceeded = true;
-        }
-        catch (Exception ex)
-        {
-            LastSaveSucceeded = false;
-            // 只记录不含 Token 的可读错误
-            System.Diagnostics.Debug.WriteLine($"[DeepSeekMeter] 保存设置失败：{ex.Message}");
-            SaveFailed?.Invoke("设置保存失败，请检查磁盘空间或文件权限"); // 让界面知道，不含敏感信息
-        }
-    }
-
     private static readonly JsonSerializerOptions SnapshotOptions = new()
     {
         WriteIndented = true,
-        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
     };
 
     // MARK: - INotifyPropertyChanged

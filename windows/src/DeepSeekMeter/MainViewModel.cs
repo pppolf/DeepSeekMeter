@@ -295,8 +295,12 @@ public sealed class MainViewModel : INotifyPropertyChanged
         try
         {
             var user = await _service.FetchCurrentUserAsync(trimmed);
-            Settings.PlatformToken = trimmed;
-            Settings.PlatformUserName = user.Email;
+            // 先校验 Token，再原子落盘（DPAPI 加密 + 写文件）；失败不触发登录成功
+            if (!Settings.TrySetPlatformCredentials(trimmed, user.Email, out var setError))
+            {
+                UsageError = setError;
+                return false;
+            }
             Currency = user.Currency;
             UsageError = null;
             PlatformTokenExpired = false;
@@ -316,9 +320,14 @@ public sealed class MainViewModel : INotifyPropertyChanged
 
     public void ClearPlatformToken()
     {
-        // 同时清除应用 Token 与 WebView2 网页登录数据（Cookie/localStorage），允许真正切换账号
+        // 先清除设置文件中的加密字段（成功才清内存，失败保留一致登录状态）
+        if (!Settings.TryClearPlatformCredentials(out var clearError))
+        {
+            LastError = "本地登录信息清除失败";
+            return;
+        }
+        // 设置文件清除成功后，再清理 WebView2 网页登录数据
         var webDataCleared = LoginWindow.ClearWebViewData();
-        Settings.ClearPlatformToken();
         MonthUsage = null;
         UsageError = null;
         LastBalance = null;
@@ -326,7 +335,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
         Currency = "CNY";
         LastError = webDataCleared
             ? null
-            : "已退出登录；网页登录数据清理失败，如需切换账号请重启应用";
+            : "应用 Token 已清除，但网页登录数据清理失败";
     }
 
     // MARK: - INotifyPropertyChanged
