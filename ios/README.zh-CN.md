@@ -33,7 +33,7 @@ ios/
   DeepSeekMeterWidget/             WidgetKit 余额小组件扩展（快照驱动，不共享 Token）
   DeepSeekMeter.entitlements       App Group（group.com.deepseek.meter），小组件读快照用
   DeepSeekMeterWidgetInfo.plist    小组件扩展 Info.plist（NSExtensionPointIdentifier=com.apple.widgetkit-extension）
-    Views/                        概览 / 用量 / 趋势（Swift Charts）/ 设置 / 登录（WKWebView + 弹窗内嵌）
+    Views/                        HomeView（余额/用量/趋势集成）+ TokenDailyChart + 设置 + 登录（WKWebView + 弹窗内嵌）
     Assets.xcassets               AppIcon（1024，鲸鱼娘深蓝底扁平化）
   DeepSeekMeter.xcodeproj         Xcode 工程（本地包依赖 DeepSeekMeterCore）
   Info.plist                      App Info.plist（UIBackgroundModes fetch + BGTaskSchedulerPermittedIdentifiers）
@@ -60,7 +60,8 @@ xcodebuild -project ios/DeepSeekMeter.xcodeproj -scheme DeepSeekMeter \
 ## ✅ 本地验证（2026-08-15）
 
 - Xcode 26.6（iOS 26.5 SDK）构建通过：**DeepSeekMeter.app 与 DeepSeekMeterWidget.appex 均编译成功**（App + 小组件扩展 + 内嵌 PlugIns）。
-- App 已安装并在 **iPhone 17 模拟器**运行，截图：[simulator-first-run.png](screenshots/simulator-first-run.png)。
+- App 已安装并在 **iPhone 17 模拟器**运行；主页（余额/用量/趋势集成）截图：[simulator-home-v2.png](screenshots/simulator-home-v2.png)；首次运行旧版：[simulator-first-run.png](screenshots/simulator-first-run.png)。
+- 布局改为 **两个 Tab**（主页集成 + 设置），视觉对齐 macOS 悬浮窗（状态胶囊、渐变余额卡、万/亿格式化、按模型拆分、按天趋势图带今日/峰值标注）。
 - 首次真实构建发现并修复了 2 处盲写问题（Xcode 26 后台任务 API 签名变化；带标签元组兜底）。
 
 ## ⚠️ M5 已知限制

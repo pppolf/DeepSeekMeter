@@ -33,7 +33,7 @@ ios/
   DeepSeekMeterWidget/             WidgetKit balance widget extension (snapshot-driven, no token sharing)
   DeepSeekMeter.entitlements       App Group (group.com.deepseek.meter) for widget snapshot
   DeepSeekMeterWidgetInfo.plist    Widget extension Info.plist (NSExtensionPointIdentifier=com.apple.widgetkit-extension)
-    Views/                         Overview / Usage / Trend (Swift Charts) / Settings / Login (WKWebView + in-app OAuth popups)
+    Views/                         HomeView (integrated balance/usage/trend) + TokenDailyChart + Settings + Login (WKWebView + in-app OAuth popups)
     Assets.xcassets                AppIcon (1024, whale-girl flattened on deep-blue background)
   DeepSeekMeter.xcodeproj          Xcode project (local package dependency on DeepSeekMeterCore)
   Info.plist                       App Info.plist (UIBackgroundModes fetch + BGTaskSchedulerPermittedIdentifiers)
@@ -60,7 +60,8 @@ xcodebuild -project ios/DeepSeekMeter.xcodeproj -scheme DeepSeekMeter \
 ## ✅ Local verification (2026-08-15)
 
 - Built with Xcode 26.6 (iOS 26.5 SDK): **DeepSeekMeter.app + DeepSeekMeterWidget.appex both compile** (main app + widget extension + embedded PlugIns).
-- App installed and running in the **iPhone 17 simulator**; screenshot: [simulator-first-run.png](screenshots/simulator-first-run.png).
+- App installed and running in the **iPhone 17 simulator**; home screen (integrated balance / usage / trend): [simulator-home-v2.png](screenshots/simulator-home-v2.png); earlier first-run: [simulator-first-run.png](screenshots/simulator-first-run.png).
+- UI layout: **2 tabs** (主页 integrated + 设置), visual style aligned with the macOS popover (status pill, gradient balance card, 万/亿 formatting, per-model rows, daily trend chart with peak/today footer).
 - Two blind-written compile issues were found and fixed during this first real build (background-task API signature change in Xcode 26; labeled tuple fallback).
 
 ## ⚠️ Known limitations (M5)
