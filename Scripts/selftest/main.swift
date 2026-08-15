@@ -243,4 +243,5 @@ if failures > 0 {
     print("\n❌ \(failures) 项未通过")
     exit(1)
 }
-print("\n✅ 全部通过")
+print("\n✅ 全部通过")// 测试提交：验证 pull_request_target 版 AI Review 触发
+
