@@ -86,6 +86,72 @@ public sealed class UsageDay
     [JsonPropertyName("data")] public List<ModelUsage> Data { get; set; } = [];
 }
 
+// MARK: - by_api_key 用量（实时接口：usage/by_api_key/amount、usage/by_api_key/cost）
+// 参数 start/end 为 Unix 秒，tz 为秒偏移（UTC+8 = 28800），bucket=86400 按天分桶；
+// 与 usage/amount、usage/cost（当日数据延迟数小时～次日）不同，该接口数据实时
+
+/// <summary>usage/by_api_key/amount 的 biz_data。</summary>
+public sealed class ApiKeyAmountData
+{
+    [JsonPropertyName("start")] public long Start { get; set; }
+    [JsonPropertyName("end")] public long End { get; set; }
+    [JsonPropertyName("bucket")] public int Bucket { get; set; }
+    [JsonPropertyName("models")] public List<string> Models { get; set; } = [];
+    [JsonPropertyName("series")] public List<ApiKeyAmountSeries> Series { get; set; } = [];
+}
+
+public sealed class ApiKeyAmountSeries
+{
+    [JsonPropertyName("api_key")] public ApiKeyInfo ApiKey { get; set; } = new();
+    [JsonPropertyName("model")] public string Model { get; set; } = "";
+    [JsonPropertyName("buckets")] public List<ApiKeyUsageBucket> Buckets { get; set; } = [];
+}
+
+/// <summary>usage/by_api_key/cost 的 biz_data。</summary>
+public sealed class ApiKeyCostData
+{
+    [JsonPropertyName("start")] public long Start { get; set; }
+    [JsonPropertyName("end")] public long End { get; set; }
+    [JsonPropertyName("bucket")] public int Bucket { get; set; }
+    [JsonPropertyName("models")] public List<string> Models { get; set; } = [];
+    [JsonPropertyName("data")] public List<ApiKeyCostGroup> Data { get; set; } = [];
+}
+
+public sealed class ApiKeyCostGroup
+{
+    [JsonPropertyName("currency")] public string Currency { get; set; } = "";
+    [JsonPropertyName("series")] public List<ApiKeyCostSeries> Series { get; set; } = [];
+}
+
+public sealed class ApiKeyCostSeries
+{
+    [JsonPropertyName("api_key")] public ApiKeyInfo ApiKey { get; set; } = new();
+    [JsonPropertyName("model")] public string Model { get; set; } = "";
+    [JsonPropertyName("buckets")] public List<ApiKeyCostBucket> Buckets { get; set; } = [];
+}
+
+public sealed class ApiKeyInfo
+{
+    [JsonPropertyName("tracking_id")] public string TrackingId { get; set; } = "";
+    [JsonPropertyName("name")] public string Name { get; set; } = "";
+    [JsonPropertyName("sensitive_id")] public string SensitiveId { get; set; } = "";
+    [JsonPropertyName("valid")] public bool Valid { get; set; }
+}
+
+/// <summary>按天桶的 token 用量：type -> amount（REQUEST / RESPONSE_TOKEN / PROMPT_CACHE_HIT_TOKEN / PROMPT_CACHE_MISS_TOKEN）。</summary>
+public sealed class ApiKeyUsageBucket
+{
+    [JsonPropertyName("time")] public long Time { get; set; }
+    [JsonPropertyName("usage")] public Dictionary<string, string> Usage { get; set; } = [];
+}
+
+/// <summary>按天桶的费用。</summary>
+public sealed class ApiKeyCostBucket
+{
+    [JsonPropertyName("time")] public long Time { get; set; }
+    [JsonPropertyName("cost")] public string Cost { get; set; } = "0";
+}
+
 /// <summary>get_user_summary 的 biz_data。</summary>
 public sealed class UserSummary
 {
@@ -168,7 +234,144 @@ public sealed class MonthUsage
 
     private double SumAmount(string type) => AmountModels.Sum(m => m.ValueFor(type));
 
-    private static string DayKey(DateTime date) => date.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+    /// <summary>平台统计口径时区：北京时间（UTC+8）。App 统一用此时区判定「今日/本月」，
+    /// 避免用户本地时区 ≠ UTC+8 时（跨时区旅行等）出现日期错位（对齐 macOS 版）。</summary>
+    public static readonly TimeZoneInfo PlatformTimeZone =
+        TimeZoneInfo.FindSystemTimeZoneById("China Standard Time");
+
+    private static string DayKey(DateTime date) =>
+        TimeZoneInfo.ConvertTime(date, PlatformTimeZone).ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+
+    // MARK: - by_api_key 序列聚合
+
+    /// <summary>
+    /// 把 by_api_key 的天桶序列聚合成 MonthUsage。
+    /// startTs/endTs 为查询窗口（Unix 秒），窗口外的桶会被忽略（防御越界数据）；
+    /// year/month 取自 startTs，调用方需保证 startTs 为本月 1 日；
+    /// 费用只聚合 data 中第一个币种分组（与旧 usage/cost 实现「取第一个」一致），避免多币种混加。
+    /// </summary>
+    public static MonthUsage Aggregated(
+        long startTs,
+        long endTs,
+        int tzSeconds,
+        ApiKeyAmountData? amountData,
+        ApiKeyCostData? costData)
+    {
+        var tz = tzSeconds == 28800
+            ? PlatformTimeZone
+            : TimeZoneInfo.CreateCustomTimeZone("CustomTz", TimeSpan.FromSeconds(tzSeconds), "CustomTz", "CustomTz");
+        var startDate = TimeZoneInfo.ConvertTime(DateTimeOffset.FromUnixTimeSeconds(startTs).UtcDateTime, tz);
+
+        string DayString(long ts) =>
+            TimeZoneInfo.ConvertTime(DateTimeOffset.FromUnixTimeSeconds(ts).UtcDateTime, tz)
+                .ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+        bool InWindow(long ts) => ts >= startTs && ts < endTs;
+
+        // 1. token/请求：day -> model -> type -> value
+        var amountByDay = new Dictionary<string, Dictionary<string, Dictionary<string, double>>>();
+        var amountByModel = new Dictionary<string, Dictionary<string, double>>();
+        foreach (var series in amountData?.Series ?? [])
+        {
+            foreach (var bucket in series.Buckets)
+            {
+                if (!InWindow(bucket.Time)) continue;
+                var day = DayString(bucket.Time);
+                foreach (var kv in bucket.Usage)
+                {
+                    var value = double.TryParse(kv.Value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var d) ? d : 0;
+                    if (!amountByDay.TryGetValue(day, out var byModel))
+                    {
+                        byModel = new Dictionary<string, Dictionary<string, double>>();
+                        amountByDay[day] = byModel;
+                    }
+                    if (!byModel.TryGetValue(series.Model, out var byType))
+                    {
+                        byType = new Dictionary<string, double>();
+                        byModel[series.Model] = byType;
+                    }
+                    byType[kv.Key] = byType.GetValueOrDefault(kv.Key) + value;
+                    if (!amountByModel.TryGetValue(series.Model, out var modelTotals))
+                    {
+                        modelTotals = new Dictionary<string, double>();
+                        amountByModel[series.Model] = modelTotals;
+                    }
+                    modelTotals[kv.Key] = modelTotals.GetValueOrDefault(kv.Key) + value;
+                }
+            }
+        }
+
+        // 2. 费用：只取第一个币种分组（day -> model -> 金额，统一记为 COST 类型）
+        var costByDay = new Dictionary<string, Dictionary<string, double>>();
+        var costByModel = new Dictionary<string, double>();
+        var costGroup = costData?.Data.FirstOrDefault();
+        if (costGroup is not null)
+        {
+            foreach (var series in costGroup.Series)
+            {
+                foreach (var bucket in series.Buckets)
+                {
+                    if (!InWindow(bucket.Time)) continue;
+                    var day = DayString(bucket.Time);
+                    var value = double.TryParse(bucket.Cost, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var d) ? d : 0;
+                    if (!costByDay.TryGetValue(day, out var byModel))
+                    {
+                        byModel = new Dictionary<string, double>();
+                        costByDay[day] = byModel;
+                    }
+                    byModel[series.Model] = byModel.GetValueOrDefault(series.Model) + value;
+                    costByModel[series.Model] = costByModel.GetValueOrDefault(series.Model) + value;
+                }
+            }
+        }
+
+        // 3. 组装（key 与 model 均排序，保证输出稳定）
+        static List<UsageItem> ToItems(Dictionary<string, double> dict) =>
+            dict.OrderBy(kv => kv.Key)
+                .Select(kv => new UsageItem { Type = kv.Key, Amount = kv.Value.ToString(System.Globalization.CultureInfo.InvariantCulture) })
+                .ToList();
+
+        var amountDays = amountByDay.OrderBy(kv => kv.Key).Select(kv => new UsageDay
+        {
+            Date = kv.Key,
+            Data = kv.Value.OrderBy(m => m.Key).Select(m => new ModelUsage
+            {
+                Model = m.Key,
+                Usage = ToItems(m.Value),
+            }).ToList(),
+        }).ToList();
+
+        var amountModels = amountByModel.OrderBy(kv => kv.Key).Select(kv => new ModelUsage
+        {
+            Model = kv.Key,
+            Usage = ToItems(kv.Value),
+        }).ToList();
+
+        var costDays = costByDay.OrderBy(kv => kv.Key).Select(kv => new UsageDay
+        {
+            Date = kv.Key,
+            Data = kv.Value.OrderBy(m => m.Key).Select(m => new ModelUsage
+            {
+                Model = m.Key,
+                Usage = [new UsageItem { Type = "COST", Amount = m.Value.ToString(System.Globalization.CultureInfo.InvariantCulture) }],
+            }).ToList(),
+        }).ToList();
+
+        var costModels = costByModel.OrderBy(kv => kv.Key).Select(kv => new ModelUsage
+        {
+            Model = kv.Key,
+            Usage = [new UsageItem { Type = "COST", Amount = kv.Value.ToString(System.Globalization.CultureInfo.InvariantCulture) }],
+        }).ToList();
+
+        return new MonthUsage
+        {
+            Year = startDate.Year,
+            Month = startDate.Month,
+            AmountModels = amountModels,
+            CostModels = costModels,
+            CostDays = costDays,
+            AmountDays = amountDays,
+        };
+    }
 }
 
 /// <summary>JSON 解码选项：snake_case 键名自动映射到 CamelCase 属性（对齐 Swift convertFromSnakeCase）。</summary>

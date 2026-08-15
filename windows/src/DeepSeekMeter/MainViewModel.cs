@@ -221,7 +221,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
         }
     }
 
-    /// <summary>用量：拉取本月 usage/amount + usage/cost（对齐 macOS 版 async let 并发）。</summary>
+    /// <summary>用量：拉取本月 by_api_key 实时接口并聚合（对齐 macOS 版，北京时间窗口）。</summary>
     private async Task FetchUsageAsync()
     {
         if (string.IsNullOrEmpty(Settings.PlatformToken))
@@ -232,20 +232,20 @@ public sealed class MainViewModel : INotifyPropertyChanged
         }
         try
         {
-            var now = DateTime.Now;
-            var amountTask = _service.FetchUsageAmountAsync(Settings.PlatformToken, now.Month, now.Year);
-            var costTask = _service.FetchUsageCostAsync(Settings.PlatformToken, now.Month, now.Year);
+            // 用平台时区（北京时间）而不是本地时区：跨时区旅行时本地时区变化，
+            // 会导致「今日/本月」与平台统计口径错位（今日费用/请求显示 0 或错位）
+            var beijingNow = TimeZoneInfo.ConvertTime(DateTime.Now, MonthUsage.PlatformTimeZone);
+            var start = new DateTime(beijingNow.Year, beijingNow.Month, 1, 0, 0, 0, DateTimeKind.Unspecified);
+            var end = start.AddMonths(1);
+            var tz = (int)MonthUsage.PlatformTimeZone.BaseUtcOffset.TotalSeconds; // 28800（UTC+8）
+            var startTs = new DateTimeOffset(start, MonthUsage.PlatformTimeZone.GetUtcOffset(start)).ToUnixTimeSeconds();
+            var endTs = new DateTimeOffset(end, MonthUsage.PlatformTimeZone.GetUtcOffset(end)).ToUnixTimeSeconds();
+
+            var amountTask = _service.FetchApiKeyAmountAsync(Settings.PlatformToken, startTs, endTs, tz);
+            var costTask = _service.FetchApiKeyCostAsync(Settings.PlatformToken, startTs, endTs, tz);
             await Task.WhenAll(amountTask, costTask);
 
-            MonthUsage = new MonthUsage
-            {
-                Year = now.Year,
-                Month = now.Month,
-                AmountModels = amountTask.Result.Total,
-                CostModels = costTask.Result.Total,
-                CostDays = costTask.Result.Days ?? [],
-                AmountDays = amountTask.Result.Days ?? [],
-            };
+            MonthUsage = MonthUsage.Aggregated(startTs, endTs, tz, amountTask.Result, costTask.Result);
             UsageError = null;
             PlatformTokenExpired = false;
             LastUpdate = DateTime.Now; // 最后成功时间

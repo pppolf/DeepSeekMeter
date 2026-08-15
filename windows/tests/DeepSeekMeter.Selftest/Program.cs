@@ -399,6 +399,63 @@ Check(!UrlSafety.IsAllowedExternalUrl("file:///c:/x"), "外链 file 拒绝");
 Check(!UrlSafety.IsAllowedExternalUrl("javascript:x"), "外链 javascript 拒绝");
 Check(!UrlSafety.IsAllowedExternalUrl("ms-settings:x"), "外链 ms-settings 拒绝");
 
+// 16. by_api_key 实时接口：解码 + 聚合（start/end 为 Unix 秒，tz=28800，bucket=86400 按天）
+// 时间戳：1785513600 = 北京 8/1 00:00，1785600000 = 北京 8/2 00:00
+var byKeyAmountJson = """
+{"code":0,"msg":"","data":{"biz_code":0,"biz_msg":"","biz_data":{"start":1785513600,"end":1788192000,"bucket":86400,"models":["deepseek-v4-pro"],"series":[{"api_key":{"tracking_id":"test-tracking","name":"test-key","sensitive_id":"sk-xxx","valid":true},"model":"deepseek-v4-pro","buckets":[{"time":1785513600,"usage":{"REQUEST":"2","RESPONSE_TOKEN":"100"}},{"time":1785600000,"usage":{"REQUEST":"5","RESPONSE_TOKEN":"200"}}]}]}}}
+""";
+var byKeyCostJson = """
+{"code":0,"msg":"","data":{"biz_code":0,"biz_msg":"","biz_data":{"start":1785513600,"end":1788192000,"bucket":86400,"models":["deepseek-v4-pro"],"data":[{"currency":"CNY","series":[{"api_key":{"tracking_id":"test-tracking","name":"test-key","sensitive_id":"sk-xxx","valid":true},"model":"deepseek-v4-pro","buckets":[{"time":1785513600,"cost":"1.5"},{"time":1785600000,"cost":"2.5"}]}]}]}}}
+""";
+try
+{
+    var amountResp = JsonSerializer.Deserialize<PlatformEnvelope<BizWrapper<ApiKeyAmountData>>>(byKeyAmountJson, Json.Options)!;
+    var amountData = amountResp.Data?.BizData;
+    Check(amountData?.Series.Count == 1, "by_api_key amount series 数");
+    Check(amountData?.Series[0].Buckets.Count == 2, "by_api_key amount 桶数");
+    Check(amountData?.Series[0].ApiKey.Name == "test-key" && amountData?.Series[0].ApiKey.TrackingId == "test-tracking", "by_api_key api_key 元信息（占位符）");
+
+    var costResp = JsonSerializer.Deserialize<PlatformEnvelope<BizWrapper<ApiKeyCostData>>>(byKeyCostJson, Json.Options)!;
+    var costData = costResp.Data?.BizData;
+    Check(costData?.Data[0].Currency == "CNY", "by_api_key cost 币种");
+
+    var usage = MonthUsage.Aggregated(1785513600, 1788192000, 28800, amountData, costData);
+    Check(usage.Year == 2026 && usage.Month == 8, "聚合年月（北京时间）");
+    Check(usage.AmountDays.Count == 2, "聚合 amount 天数");
+    Check(usage.AmountDays[0].Date == "2026-08-01", "聚合 amount 首日");
+    Check(usage.AmountDays[1].Date == "2026-08-02", "聚合 amount 末日");
+    Check(usage.AmountModels[0].Requests == 7, "聚合本月请求 2+5");
+    Check(Math.Abs(usage.AmountModels[0].ValueFor("RESPONSE_TOKEN") - 300) < 0.001, "聚合本月输出 100+200");
+    Check(usage.CostDays.Count == 2, "聚合 cost 天数");
+    Check(Math.Abs(usage.CostOn(new DateTime(2026, 8, 1)) - 1.5) < 0.001, "聚合 8/1 费用 1.5");
+    Check(Math.Abs(usage.TotalCost - 4.0) < 0.001, "聚合本月费用 1.5+2.5");
+
+    // 空数据聚合不崩溃
+    var emptyUsage = MonthUsage.Aggregated(1785513600, 1788192000, 28800, null, null);
+    Check(emptyUsage.AmountDays.Count == 0 && Math.Abs(emptyUsage.TotalCost) < 0.001, "空数据聚合为 0");
+
+    // 边界：窗口外（下月）桶被忽略；窗口内 8/31 桶计入
+    var monthEdgeJson = """
+{"code":0,"msg":"","data":{"biz_code":0,"biz_msg":"","biz_data":{"start":1785513600,"end":1788192000,"bucket":86400,"models":["deepseek-v4-pro"],"series":[{"api_key":{"tracking_id":"test-tracking","name":"test-key","sensitive_id":"sk-xxx","valid":true},"model":"deepseek-v4-pro","buckets":[{"time":1788105600,"usage":{"REQUEST":"3"}},{"time":1788192000,"usage":{"REQUEST":"99"}}]}]}}}
+""";
+    var edgeData = JsonSerializer.Deserialize<PlatformEnvelope<BizWrapper<ApiKeyAmountData>>>(monthEdgeJson, Json.Options)!.Data?.BizData;
+    var edgeUsage = MonthUsage.Aggregated(1785513600, 1788192000, 28800, edgeData, null);
+    Check(edgeUsage.AmountDays.Count == 1 && edgeUsage.AmountDays[0].Date == "2026-08-31", "窗口内 8/31 桶计入");
+    Check(edgeUsage.AmountModels[0].Requests == 3, "窗口外 9/1 桶被忽略（99 不计入）");
+
+    // 边界：多币种分组只聚合第一个（CNY），USD 组不混加
+    var multiCurrencyJson = """
+{"code":0,"msg":"","data":{"biz_code":0,"biz_msg":"","biz_data":{"start":1785513600,"end":1788192000,"bucket":86400,"models":["deepseek-v4-pro"],"data":[{"currency":"CNY","series":[{"api_key":{"tracking_id":"test-tracking","name":"test-key","sensitive_id":"sk-xxx","valid":true},"model":"deepseek-v4-pro","buckets":[{"time":1785513600,"cost":"1.0"}]}]},{"currency":"USD","series":[{"api_key":{"tracking_id":"test-tracking","name":"test-key","sensitive_id":"sk-xxx","valid":true},"model":"deepseek-v4-pro","buckets":[{"time":1785513600,"cost":"5.0"}]}]}]}}}
+""";
+    var mcData = JsonSerializer.Deserialize<PlatformEnvelope<BizWrapper<ApiKeyCostData>>>(multiCurrencyJson, Json.Options)!.Data?.BizData;
+    var mcUsage = MonthUsage.Aggregated(1785513600, 1788192000, 28800, null, mcData);
+    Check(Math.Abs(mcUsage.TotalCost - 1.0) < 0.001, "多币种只聚合第一个分组（CNY 1.0，USD 5.0 不混加）");
+}
+catch (Exception ex)
+{
+    Check(false, $"by_api_key 解码/聚合抛错：{ex.Message}");
+}
+
 if (failures > 0)
 {
     Console.WriteLine($"\n❌ {failures} 项未通过");

@@ -75,7 +75,7 @@ public sealed class PlatformException : Exception
 /// 平台私有接口客户端（platform.deepseek.com，用浏览器登录态 userToken 鉴权）。
 /// 对齐 macOS 版 PlatformService.swift，接口契约一致：
 ///   /auth-api/v0/users/current、/api/v0/users/get_user_summary、
-///   /api/v0/usage/amount、/api/v0/usage/cost
+///   /api/v0/usage/by_api_key/amount、/api/v0/usage/by_api_key/cost（实时）
 /// </summary>
 public sealed class PlatformService
 {
@@ -128,29 +128,29 @@ public sealed class PlatformService
             ?? throw PlatformException.Api(response.Code, "summary 为空");
     }
 
-    /// <summary>本月 token 用量（biz_data 是对象）。</summary>
-    public async Task<UsageData> FetchUsageAmountAsync(string token, int month, int year, CancellationToken ct = default)
+    /// <summary>按 API Key 的 token 用量（实时；start/end 为 Unix 秒，tz 为秒偏移，bucket=86400 按天分桶）。
+    /// 与 usage/amount（当日数据延迟数小时～次日）不同，该接口当日数据实时。</summary>
+    public async Task<ApiKeyAmountData> FetchApiKeyAmountAsync(string token, long start, long end, int tz, CancellationToken ct = default)
     {
-        var response = await GetAsync<AmountResponse>($"/api/v0/usage/amount?month={month}&year={year}", token, ct);
+        var response = await GetAsync<ApiKeyAmountResponse>($"/api/v0/usage/by_api_key/amount?start={start}&end={end}&tz={tz}&bucket=86400", token, ct);
         EnsureSuccess(response.Code, response.Msg);
         if (response.Data is null)
-            throw PlatformException.Api(response.Code, "amount 为空");
+            throw PlatformException.Api(response.Code, "by_api_key amount 为空");
         EnsureBizSuccess(response.Data.BizCode, response.Data.BizMsg);
         return response.Data.BizData
-            ?? throw PlatformException.Api(response.Code, "amount 为空");
+            ?? throw PlatformException.Api(response.Code, "by_api_key amount 为空");
     }
 
-    /// <summary>本月费用（biz_data 是数组，取第一个）。</summary>
-    public async Task<UsageData> FetchUsageCostAsync(string token, int month, int year, CancellationToken ct = default)
+    /// <summary>按 API Key 的费用（实时；start/end 为 Unix 秒，tz 为秒偏移，bucket=86400 按天分桶）。</summary>
+    public async Task<ApiKeyCostData> FetchApiKeyCostAsync(string token, long start, long end, int tz, CancellationToken ct = default)
     {
-        var response = await GetAsync<CostResponse>($"/api/v0/usage/cost?month={month}&year={year}", token, ct);
+        var response = await GetAsync<ApiKeyCostResponse>($"/api/v0/usage/by_api_key/cost?start={start}&end={end}&tz={tz}&bucket=86400", token, ct);
         EnsureSuccess(response.Code, response.Msg);
         if (response.Data is null)
-            throw PlatformException.Api(response.Code, "cost 为空");
+            throw PlatformException.Api(response.Code, "by_api_key cost 为空");
         EnsureBizSuccess(response.Data.BizCode, response.Data.BizMsg);
-        var first = response.Data.BizData?.FirstOrDefault()
-            ?? throw PlatformException.Api(response.Code, "cost 为空");
-        return first;
+        return response.Data.BizData
+            ?? throw PlatformException.Api(response.Code, "by_api_key cost 为空");
     }
 
     // MARK: - 请求
@@ -237,17 +237,17 @@ public sealed class PlatformService
         [System.Text.Json.Serialization.JsonPropertyName("data")] public BizWrapper<UserSummary>? Data { get; set; }
     }
 
-    private sealed class AmountResponse
+    private sealed class ApiKeyAmountResponse
     {
         [System.Text.Json.Serialization.JsonPropertyName("code")] public int Code { get; set; }
         [System.Text.Json.Serialization.JsonPropertyName("msg")] public string Msg { get; set; } = "";
-        [System.Text.Json.Serialization.JsonPropertyName("data")] public BizWrapper<UsageData>? Data { get; set; }
+        [System.Text.Json.Serialization.JsonPropertyName("data")] public BizWrapper<ApiKeyAmountData>? Data { get; set; }
     }
 
-    private sealed class CostResponse
+    private sealed class ApiKeyCostResponse
     {
         [System.Text.Json.Serialization.JsonPropertyName("code")] public int Code { get; set; }
         [System.Text.Json.Serialization.JsonPropertyName("msg")] public string Msg { get; set; } = "";
-        [System.Text.Json.Serialization.JsonPropertyName("data")] public BizWrapper<List<UsageData>>? Data { get; set; }
+        [System.Text.Json.Serialization.JsonPropertyName("data")] public BizWrapper<ApiKeyCostData>? Data { get; set; }
     }
 }
