@@ -7,7 +7,7 @@
 ![Windows](https://img.shields.io/badge/Windows-10%2B-blue)
 [中文版](README.zh-CN.md)
 
-A lightweight **macOS menu bar app** that keeps an eye on your DeepSeek account: balance, spending and token usage at a glance. Click the menu bar icon to open a popover with real-time stats. A **Windows version** (system tray) with the same features lives in [`windows/`](windows/README.md).
+A lightweight **macOS menu bar app** that keeps an eye on your DeepSeek account: balance, spending and token usage at a glance. Click the menu bar icon to open a popover with real-time stats. A **Windows version** (system tray) with the same features lives in [`windows/`](windows/README.md). An **iOS version** (in development) lives in [`ios/`](ios/README.md).
 
 ## ✨ Features
 
@@ -87,6 +87,7 @@ Sources/DeepSeekMeter/           App sources (SwiftUI + AppKit)
 Scripts/                         Info.plist / build / install / icon / tests
 Scripts/selftest/                Lightweight unit tests (no Xcode needed)
 windows/                         Windows version (.NET 8 + WPF, see windows/README.md)
+ios/                             iOS version (in development, see ios/README.md)
 ```
 
 ```bash
