@@ -50,12 +50,9 @@ final class LoginWindowController: NSObject, NSWindowDelegate, WKNavigationDeleg
         statusLabel.frame = NSRect(x: 12, y: 8, width: 300, height: 20)
         statusLabel.font = .systemFont(ofSize: 11)
         statusLabel.textColor = .secondaryLabelColor
-        let browserButton = NSButton(title: "用系统浏览器打开", target: self, action: #selector(openInBrowser))
-        browserButton.bezelStyle = .inline
-        browserButton.controlSize = .small
-        browserButton.frame = NSRect(x: 480 - 152, y: 6, width: 140, height: 24)
+        // 注意：不提供「用系统浏览器打开」——系统浏览器里完成的登录态无法传回本窗口，
+        // 扫码/社交登录必须在内嵌页完成（历史教训：跳出去扫码后 App 永远收不到 Token）
         topBar.addSubview(statusLabel)
-        topBar.addSubview(browserButton)
 
         let content = NSView(frame: NSRect(x: 0, y: 0, width: 480, height: 644))
         content.addSubview(topBar)
@@ -224,21 +221,13 @@ final class LoginWindowController: NSObject, NSWindowDelegate, WKNavigationDeleg
         }
     }
 
-    @objc private func openInBrowser() {
-        if let url = URL(string: "https://platform.deepseek.com/") {
-            NSWorkspace.shared.open(url)
-        }
-    }
-
     // MARK: - OAuth 弹窗（共享数据存储，token 仍可在主窗口读到）
 
-    /// 外部链接（非 *.deepseek.com）交给系统浏览器，不在内嵌页打开
+    /// 登录页内的所有跳转（含扫码/社交登录等第三方域）一律在内嵌 WebView 中继续：
+    /// 若把非 deepseek.com 的导航交给系统浏览器，OAuth 回跳会把登录态落在系统浏览器，
+    /// App 的 localStorage 轮询永远读不到 Token（扫码后无反应）。
+    /// Token 提取仍受 isDeepSeekDomain 限制，只在官方域名读取，安全性不受影响。
     func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
-        if let url = navigationAction.request.url, !Self.isDeepSeekDomain(url) {
-            decisionHandler(.cancel)
-            NSWorkspace.shared.open(url)
-            return
-        }
         decisionHandler(.allow)
     }
 
