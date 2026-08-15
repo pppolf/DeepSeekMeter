@@ -88,3 +88,49 @@ bash Scripts/run-ios-simulator.sh
 3. 在开发者后台注册 App Group ID（`group.com.deepseek.meter`）并勾选到 App 与 Widget 的 profile
 4. 直接 Run 即可；小组件、推送、7 天免重签全部可用
 5. 想正式分发（亲友/上架）：TestFlight / Ad-hoc，见 MOBILE-PLAN.md 决策点 D1
+
+## 真机 CLI 安装（脚本/自动化路径，供参考）
+
+信任开发者后，安装与启动也可全命令行完成：
+
+```bash
+export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
+UDID=<你的设备 UDID>   # xcrun devicectl list devices 或 Xcode Devices 窗口查看
+
+# 构建（免费签名；ENABLE_DEBUG_DYLIB=NO 跳过 __preview.dylib，避免 errSecInternalComponent）
+xcodebuild -project ios/DeepSeekMeter.xcodeproj -scheme DeepSeekMeter \
+  -destination "id=\$UDID" -derivedDataPath ios/build-dev \
+  DEEPSEEK_ENTITLEMENTS=DeepSeekMeter.Free.entitlements ENABLE_DEBUG_DYLIB=NO \
+  -allowProvisioningUpdates -allowProvisioningDeviceRegistration build
+
+# 安装
+xcrun devicectl device install app --device \$UDID ios/build-dev/Build/Products/Debug-iphoneos/DeepSeekMeter.app
+
+# 启动
+xcrun devicectl device process launch --device \$UDID com.deepseek.meter.ios
+```
+
+> 注意：免费签名首次需在 iPhone「设置 -> 通用 -> VPN 与设备管理」信任开发者（Apple Development: <你的账号>）；证书 7 天过期，到期需重新构建安装。
+
+## 真机 CLI 安装（脚本/自动化路径，供参考）
+
+信任开发者后，安装与启动也可全命令行完成：
+
+```bash
+export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
+UDID=<你的设备 UDID>   # xcrun devicectl list devices 或 Xcode Devices 窗口查看
+
+# 构建（免费签名；ENABLE_DEBUG_DYLIB=NO 跳过 __preview.dylib，避免 errSecInternalComponent）
+xcodebuild -project ios/DeepSeekMeter.xcodeproj -scheme DeepSeekMeter \
+  -destination "id=\$UDID" -derivedDataPath ios/build-dev \
+  DEEPSEEK_ENTITLEMENTS=DeepSeekMeter.Free.entitlements ENABLE_DEBUG_DYLIB=NO \
+  -allowProvisioningUpdates -allowProvisioningDeviceRegistration build
+
+# 安装
+xcrun devicectl device install app --device \$UDID ios/build-dev/Build/Products/Debug-iphoneos/DeepSeekMeter.app
+
+# 启动
+xcrun devicectl device process launch --device \$UDID com.deepseek.meter.ios
+```
+
+> 注意：免费签名首次需在 iPhone「设置 -> 通用 -> VPN 与设备管理」信任开发者（Apple Development: <你的账号>）；证书 7 天过期，到期需重新构建安装。
