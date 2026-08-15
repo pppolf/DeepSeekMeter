@@ -3,7 +3,7 @@
 > 本文档是 iOS / Android 移动端的**规划与实施方案**，供维护者评审后按里程碑执行。
 > 目标：与 macOS / Windows 版功能对齐，延续「平行实现 + 零第三方业务依赖 + 隐私承诺」的项目基因。
 
-**进度**：M1 骨架 ✅（2026-08，ios/ 目录、核心包、Xcode 工程空壳、CI ios-build、.gitignore、AGENTS.md 红线适配）｜ M2 核心包 + 自测 ✅（62 项全绿）｜ M3 App 主体（进行中）｜ M4-M5 / A1-A5 待启动。
+**进度**：M1 骨架 ✅（2026-08，ios/ 目录、核心包、Xcode 工程空壳、CI ios-build、.gitignore、AGENTS.md 红线适配）｜ M2 核心包 + 自测 ✅（80 项断言全绿，退出码 0）｜ M3 App 主体代码 ✅（AppModel 状态机 + Keychain + WKWebView 登录 + 四 Tab，状态机已本地自测；App 层待真机/CI 验证）｜ M4-M5 / A1-A5 待启动。
 
 ---
 
@@ -67,8 +67,9 @@ ios/
 |   |   |-- PlatformService.swift          # 平台接口客户端 + PlatformError（对齐 Sources/.../PlatformService.swift）
 |   |   |-- Models.swift                   # 网络模型 + MonthUsage 聚合 + DataStatus（对齐 Models.swift）
 |   |   |-- Formatting.swift               # format() / currencySymbol()（对齐 Formatting.swift）
-|   |   +-- TokenStoring.swift             # TokenStore 协议（注入式，Keychain 实现放 App target，核心保持纯逻辑）
-|   +-- Tests/DeepSeekMeterCoreTests/      # swift test（XCTest via SPM，macOS 上直接跑，无需模拟器）
+|   |   |-- TokenStoring.swift             # TokenStore 协议（注入式，Keychain 实现放 App target）
+|   |   +-- AppModel.swift                 # 状态中枢（对齐 macOS AppModel.swift；注入 TokenStoring+URLSession，可在 macOS 上自测）
+|   +-- Sources/DeepSeekMeterCoreSelftest/ # 轻量自测（可执行 target，不依赖 XCTest；CLT 环境可直接 swift run）
 |-- DeepSeekMeter/                         # iOS App target（SwiftUI）
 |   |-- DeepSeekMeterApp.swift             # @main
 |   |-- AppModel.swift                     # 状态中枢（对齐 macOS AppModel.swift：轮询/拉取/错误态）
@@ -92,7 +93,8 @@ ios/
 | PlatformService.swift | PlatformService.swift | **照搬**：URLSession、User-Agent/Referer/Origin/Authorization 头、15s 超时、错误归一化为 PlatformError（中文 message）。仅将 URLSession.shared 换成可注入的 URLSession（便于测试） |
 | Models.swift | Models.swift | **照搬**：Envelope/BizWrapper 解包、APIKeyAmount/Cost 模型、MonthUsage.aggregated()（UTC+8 平台时区口径）、DataStatus 判定 |
 | Formatting.swift | Formatting.swift | **照搬**：format() / currencySymbol() |
-| （新增） | TokenStoring.swift | protocol TokenStore { get/save/clear }，核心不依赖 Keychain，自测用内存实现 |
+| AppModel.swift | AppModel.swift | **移植 + 注入化**：UI 逻辑收进核心包；注入 TokenStoring 与 PlatformService（URLSession 可注入），状态机可在 macOS 上跑自测（selftest 第 12 节） |
+| （新增） | TokenStoring.swift | protocol TokenStore { load/save/clear }，核心不依赖 Keychain；iOS 用 Keychain、自测用内存实现 |
 
 > 与 windows/ 的做法区别：Windows 是**另一种语言必须重写**；iOS 与 macOS 同语言，核心直接复制 + 微调，用自测保证两份核心行为一致。后续若做 D4（macOS 引用同一核心包），漂移风险自然消除。
 
@@ -104,6 +106,8 @@ ios/
 3. 候选提取：userToken 优先 -> 键名含 token 的长值 -> 40~512 字符长值兜底；fetchCurrentUser 逐一校验，命中即回传。
 4. OAuth 弹窗（扫码/社交登录）**必须留在 WebView 内**继续（历史教训：跳系统浏览器后 App 永远收不到 Token）。
 5. 兜底：手动粘贴 Token + 校验（对齐 Windows 版 TokenInputDialog）。
+
+**M3 已知限制（M4 处理）**：登录页 window.open 弹窗（部分 OAuth/扫码流程）暂不内嵌承接，会落到系统浏览器；DeepSeek 常规密码/扫码登录在页面内导航不受影响，另有手动粘贴兜底。iOS 端承接方案：LoginWebView 内叠加 popup WKWebView 层（共享 nonPersistent dataStore）。
 
 **Token 存储 —— Keychain（与 macOS 刻意不同）**：
 - macOS 存 UserDefaults 是因为 ad-hoc 签名下钥匙串每次启动弹密码授权（红线第 2 条的背景）。
@@ -214,8 +218,9 @@ android/
 | 阶段 | 内容 | 验收 |
 | :--- | :--- | :--- |
 | **M1 骨架** ✅ | 创建 ios/ 目录、核心包 Package.swift、Xcode 工程空壳、CI ios-build job（空壳构建通过）、.gitignore 补 iOS 产物 | CI 绿；本地核心自测可跑 |
-| **M2 核心** ✅ | 移植 PlatformService/Models/Formatting/MonthUsage/DataStatus + 自测全绿（移植 selftest 用例与样例 JSON，另加 URLProtocol Mock 请求头/错误归一化用例） | 核心自测 62 项全绿，覆盖与 macOS selftest 对齐 |
-| **M3 App 主体** | 登录（WKWebView + 手动兜底 + Keychain）、概览/用量/趋势/设置四 Tab、AppModel 状态机 | 真机可登录并看到余额与本月用量 |
+| **M2 核心** ✅ | 移植 PlatformService/Models/Formatting/MonthUsage/DataStatus + 自测全绿（移植 selftest 用例与样例 JSON，另加 URLProtocol Mock 请求头/错误归一化用例与 AppModel 状态机用例） | 核心自测 80 项断言全绿（退出码 0），覆盖与 macOS selftest 对齐 |
+| **M3 App 主体** ✅（代码） | 登录（WKWebView + 手动兜底 + Keychain）、概览/用量/趋势/设置四 Tab、AppModel 状态机（收进核心包，注入 TokenStoring+URLSession，本地可测） | 状态机 80 项断言自测全绿；App 层待 CI（macos-15 xcodebuild）与真机验证 |
+| **M4 打磨与分发** | 刷新（前台+BGTask+下拉）、错误六态、本地化、图标、隐私说明；TestFlight 内测（需开发者账号，决策点 D1）；处理 M3 已知限制 | TestFlight 可分发 |
 | **M4 打磨与分发** | 刷新（前台+BGTask+下拉）、错误六态、本地化、图标、隐私说明；TestFlight 内测（需开发者账号，决策点 D1） | TestFlight 可分发 |
 | **M5 可选增值** | WidgetKit 小组件 + 余额阈值本地通知 | 锁屏可见余额 |
 | **A1–A5** | Android 版同序列（核心 -> App -> 打磨 -> APK/上架 -> 可选小组件） | 与 iOS 功能对齐 |

@@ -56,7 +56,7 @@ windows/                         Windows 版（.NET 8 + WPF，与 macOS 版功�
   tests/DeepSeekMeter.Selftest/  轻量自测（控制台，零测试框架）
   README.md                      Windows 版说明（含与 macOS 版对应关系）
 ios/                             iOS 版（开发中，详见 MOBILE-PLAN.md）
-  DeepSeekMeterCore/             共享核心 Swift Package（PlatformService / Models / Formatting / TokenStoring，零第三方依赖）
+  DeepSeekMeterCore/             共享核心 Swift Package（PlatformService / Models / Formatting / TokenStoring / AppModel，零第三方依赖；AppModel 注入 TokenStoring+URLSession，可在 macOS 上自测）
   DeepSeekMeter.xcodeproj        iOS App 工程（SwiftUI，Xcode 16 同步文件夹格式）
   DeepSeekMeter/                 iOS App 源码（AppMain / TokenStore(Keychain) / Views/）
   DeepSeekMeterCore/Sources/DeepSeekMeterCoreSelftest/  核心轻量自测（swift run 直接跑，不依赖 XCTest）

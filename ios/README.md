@@ -2,7 +2,7 @@
 
 The **iOS version** of DeepSeekMeter (in development): view your DeepSeek account balance, spending and token usage on your iPhone — feature-aligned with the [macOS](../README.md) and [Windows](../windows/README.md) versions, using the same platform API contract.
 
-> 总体规划（里程碑、决策点、红线适配）见 [MOBILE-PLAN.md](../MOBILE-PLAN.md)。当前进度：M1 骨架 ✅ / M2 核心包 + 自测 ✅ / M3 App 主体（开发中）。
+> 总体规划（里程碑、决策点、红线适配）见 [MOBILE-PLAN.md](../MOBILE-PLAN.md)。当前进度：M1 骨架 ✅ / M2 核心包 + 自测 ✅（80 项断言全绿）/ M3 App 主体代码 ✅（状态机已本地自测；App 层待真机与 CI 验证）/ M4-M5 待启动。
 
 ## ✨ Features (target)
 
@@ -24,9 +24,11 @@ The **iOS version** of DeepSeekMeter (in development): view your DeepSeek accoun
 ```
 ios/
   DeepSeekMeterCore/               Shared core Swift Package (zero third-party deps)
-    Sources/DeepSeekMeterCore/     PlatformService / Models / Formatting / TokenStoring
+    Sources/DeepSeekMeterCore/     PlatformService / Models / Formatting / TokenStoring / AppModel
     Sources/DeepSeekMeterCoreSelftest/   Lightweight self-tests (no XCTest needed)
   DeepSeekMeter/                   iOS app sources (SwiftUI)
+    TokenStore.swift               Keychain-backed TokenStoring
+    Views/                         Overview / Usage / Trend (Swift Charts) / Settings / Login (WKWebView)
   DeepSeekMeter.xcodeproj          Xcode project (local package dependency on DeepSeekMeterCore)
 ```
 
@@ -47,6 +49,11 @@ xcodebuild -project ios/DeepSeekMeter.xcodeproj -scheme DeepSeekMeter \
   -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
   CODE_SIGNING_ALLOWED=NO build
 ```
+
+## ⚠️ Known limitations (M3)
+
+- The login page's `window.open` popups (some OAuth/QR flows) are not hosted in-app yet and fall back to the system browser; regular password / in-page QR login works, and the manual-paste fallback covers the rest. Fix planned for M4 (in-app popup WKWebView layer sharing the same data store).
+- Background refresh relies on the foreground timer + pull-to-refresh; BGAppRefreshTask is planned for M4.
 
 ## 🔒 Privacy
 
