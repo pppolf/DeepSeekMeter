@@ -24,26 +24,13 @@ check(currencySymbol("GBP") == "£", "GBP -> £")
 check(currencySymbol("XXX") == "XXX", "未知币种原样返回")
 
 // 1.5 平台时区对齐：北京时间（UTC+8）计日，与 usage/cost、usage/amount 的 days 口径一致
-// 用例 1：跨日边界——UTC 8/14 16:30 即北京时间 8/15 00:30，必须归入 8/15（本地时区为 UTC 时会错位成 8/14）
-var utcComps = DateComponents()
-utcComps.calendar = Calendar(identifier: .gregorian)
-utcComps.timeZone = TimeZone(identifier: "UTC")
-utcComps.year = 2026
-utcComps.month = 8
-utcComps.day = 14
-utcComps.hour = 16
-utcComps.minute = 30
-let cnMidnight = Calendar(identifier: .gregorian).date(from: utcComps)!
+// 用例 1（跨日边界）：UTC 8/14 16:30 即北京时间 8/15 00:30，必须归入 8/15（本地时区为 UTC 时会错位成 8/14）
+let cnMidnight = Calendar(identifier: .gregorian)
+    .date(from: DateComponents(timeZone: TimeZone(identifier: "UTC"), year: 2026, month: 8, day: 14, hour: 16, minute: 30))!
 check(MonthUsage.dayFormatter.string(from: cnMidnight) == "2026-08-15", "UTC 8/14 16:30 按北京时间归入 8/15")
-var shComps = DateComponents()
-shComps.calendar = Calendar(identifier: .gregorian)
-shComps.timeZone = TimeZone(identifier: "Asia/Shanghai")
-shComps.year = 2026
-shComps.month = 8
-shComps.day = 15
-shComps.hour = 23
-shComps.minute = 30
-let shLate = Calendar(identifier: .gregorian).date(from: shComps)!
+// 用例 2（当日末尾）：北京 8/15 23:30 仍属 8/15（本地时区快于 UTC+8 时会错位成 8/16）
+let shLate = Calendar(identifier: .gregorian)
+    .date(from: DateComponents(timeZone: TimeZone(identifier: "Asia/Shanghai"), year: 2026, month: 8, day: 15, hour: 23, minute: 30))!
 check(MonthUsage.dayFormatter.string(from: shLate) == "2026-08-15", "北京 8/15 23:30 仍归入 8/15")
 
 func XCTUnwrapSafe<T>(_ value: T?) throws -> T {
@@ -187,6 +174,69 @@ do {
     check(resp.data?.bizData.normalWallets.isEmpty == true, "空钱包正确解码")
 } catch {
     check(false, "空钱包解码抛错：\(error)")
+}
+
+// 10. by_api_key 实时接口：解码 + 聚合（start/end 为 Unix 秒，tz=28800，bucket=86400 按天）
+// 时间戳：1785513600 = 北京 8/1 00:00，1785600000 = 北京 8/2 00:00
+let byKeyAmountJSON = """
+{"code":0,"msg":"","data":{"biz_code":0,"biz_msg":"","biz_data":{"start":1785513600,"end":1788192000,"bucket":86400,"models":["deepseek-v4-pro"],"series":[{"api_key":{"tracking_id":"test-tracking","name":"test-key","sensitive_id":"sk-xxx","valid":true},"model":"deepseek-v4-pro","buckets":[{"time":1785513600,"usage":{"REQUEST":"2","RESPONSE_TOKEN":"100"}},{"time":1785600000,"usage":{"REQUEST":"5","RESPONSE_TOKEN":"200"}}]}]}}}
+"""
+let byKeyCostJSON = """
+{"code":0,"msg":"","data":{"biz_code":0,"biz_msg":"","biz_data":{"start":1785513600,"end":1788192000,"bucket":86400,"models":["deepseek-v4-pro"],"data":[{"currency":"CNY","series":[{"api_key":{"tracking_id":"test-tracking","name":"test-key","sensitive_id":"sk-xxx","valid":true},"model":"deepseek-v4-pro","buckets":[{"time":1785513600,"cost":"1.5"},{"time":1785600000,"cost":"2.5"}]}]}]}}}
+"""
+do {
+    struct AKBiz: Decodable { let bizCode: Int; let bizMsg: String; let bizData: APIKeyAmountData }
+    struct AKResp: Decodable { let code: Int; let data: AKBiz? }
+    let decoder = JSONDecoder()
+    decoder.keyDecodingStrategy = .convertFromSnakeCase
+    let amountResp = try decoder.decode(AKResp.self, from: Data(byKeyAmountJSON.utf8))
+    let amountData = amountResp.data?.bizData
+    check(amountData?.series.count == 1, "by_api_key amount series 数")
+    check(amountData?.series.first?.buckets.count == 2, "by_api_key amount 桶数")
+    check(amountData?.series.first?.apiKey.name == "test-key" && amountData?.series.first?.apiKey.trackingId == "test-tracking", "by_api_key api_key 元信息（占位符）")
+
+    struct CKBiz: Decodable { let bizCode: Int; let bizMsg: String; let bizData: APIKeyCostData }
+    struct CKResp: Decodable { let code: Int; let data: CKBiz? }
+    let costResp = try decoder.decode(CKResp.self, from: Data(byKeyCostJSON.utf8))
+    let costData = costResp.data?.bizData
+    check(costData?.data.first?.currency == "CNY", "by_api_key cost 币种")
+
+    // 聚合：按天 + 按模型
+    let usage = MonthUsage.aggregated(startTs: 1785513600, endTs: 1788192000, tzSeconds: 28800, amountData: amountData, costData: costData)
+    check(usage.year == 2026 && usage.month == 8, "聚合年月（北京时间）")
+    check(usage.amountDays.count == 2, "聚合 amount 天数")
+    check(usage.amountDays.first?.date == "2026-08-01", "聚合 amount 首日")
+    check(usage.amountDays.last?.date == "2026-08-02", "聚合 amount 末日")
+    check(usage.amountModels.first?.requests == 7, "聚合本月请求 2+5")
+    check(abs((usage.amountModels.first?.value(for: "RESPONSE_TOKEN") ?? 0) - 300) < 0.001, "聚合本月输出 100+200")
+    check(usage.costDays.count == 2, "聚合 cost 天数")
+    check(abs(usage.cost(on: Date(timeIntervalSince1970: 1785513600)) - 1.5) < 0.001, "聚合 8/1 费用 1.5")
+    check(abs(usage.totalCost - 4.0) < 0.001, "聚合本月费用 1.5+2.5")
+    // 空数据聚合不崩溃
+    let emptyUsage = MonthUsage.aggregated(startTs: 1785513600, endTs: 1788192000, tzSeconds: 28800, amountData: nil, costData: nil)
+    check(emptyUsage.amountDays.isEmpty && emptyUsage.totalCost == 0, "空数据聚合为 0")
+    // 边界 1：窗口外（下月）的桶被忽略；窗口内 8/31 的桶正常计入
+    // 1788105600 = 北京 8/31 00:00，1788192000 = 北京 9/1 00:00（= endTs，窗口外）
+    let monthEdgeJSON = """
+{"code":0,"msg":"","data":{"biz_code":0,"biz_msg":"","biz_data":{"start":1785513600,"end":1788192000,"bucket":86400,"models":["deepseek-v4-pro"],"series":[{"api_key":{"tracking_id":"test-tracking","name":"test-key","sensitive_id":"sk-xxx","valid":true},"model":"deepseek-v4-pro","buckets":[{"time":1788105600,"usage":{"REQUEST":"3"}},{"time":1788192000,"usage":{"REQUEST":"99"}}]}]}}}
+"""
+    struct EdgeBiz: Decodable { let bizCode: Int; let bizMsg: String; let bizData: APIKeyAmountData }
+    struct EdgeResp: Decodable { let code: Int; let data: EdgeBiz? }
+    let edge = try decoder.decode(EdgeResp.self, from: Data(monthEdgeJSON.utf8)).data?.bizData
+    let edgeUsage = MonthUsage.aggregated(startTs: 1785513600, endTs: 1788192000, tzSeconds: 28800, amountData: edge, costData: nil)
+    check(edgeUsage.amountDays.count == 1 && edgeUsage.amountDays.first?.date == "2026-08-31", "窗口内 8/31 桶计入")
+    check(edgeUsage.amountModels.first?.requests == 3, "窗口外 9/1 桶被忽略（99 不计入）")
+    // 边界 2：多币种分组只聚合第一个（CNY），USD 组不混加
+    let multiCurrencyJSON = """
+{"code":0,"msg":"","data":{"biz_code":0,"biz_msg":"","biz_data":{"start":1785513600,"end":1788192000,"bucket":86400,"models":["deepseek-v4-pro"],"data":[{"currency":"CNY","series":[{"api_key":{"tracking_id":"test-tracking","name":"test-key","sensitive_id":"sk-xxx","valid":true},"model":"deepseek-v4-pro","buckets":[{"time":1785513600,"cost":"1.0"}]}]},{"currency":"USD","series":[{"api_key":{"tracking_id":"test-tracking","name":"test-key","sensitive_id":"sk-xxx","valid":true},"model":"deepseek-v4-pro","buckets":[{"time":1785513600,"cost":"5.0"}]}]}]}}}
+"""
+    struct MCBiz: Decodable { let bizCode: Int; let bizMsg: String; let bizData: APIKeyCostData }
+    struct MCResp: Decodable { let code: Int; let data: MCBiz? }
+    let mc = try decoder.decode(MCResp.self, from: Data(multiCurrencyJSON.utf8)).data?.bizData
+    let mcUsage = MonthUsage.aggregated(startTs: 1785513600, endTs: 1788192000, tzSeconds: 28800, amountData: nil, costData: mc)
+    check(abs(mcUsage.totalCost - 1.0) < 0.001, "多币种只聚合第一个分组（CNY 1.0，USD 5.0 不混加）")
+} catch {
+    check(false, "by_api_key 解码抛错：\(error)")
 }
 
 if failures > 0 {

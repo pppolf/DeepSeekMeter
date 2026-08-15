@@ -79,7 +79,7 @@ Conventional Commits with a Chinese description:
 2. Verify locally (build debug + release, run-tests.sh, build-app.sh)
 3. Open a PR to `main` and fill in the [PR template](.github/pull_request_template.md) — every checkbox matters
 4. PR triggers CI; **merge only when CI is green** (squash merge recommended)
-5. Same-repo PRs also get an automatic **AI review** (DeepSeek API, follows AGENTS.md) — it comments as `github-actions[bot]`, advisory only; the maintainer merges manually
+5. All PRs (including forks) get an automatic **AI review** (DeepSeek API, follows AGENTS.md) — it comments as `github-actions[bot]`, advisory only; the maintainer merges manually
 6. Pushes to `main` also run CI
 
 ## Scope & Boundaries
@@ -89,7 +89,7 @@ Keep the project inside these lines — they are privacy and stability commitmen
 1. **No third-party dependencies** — zero-dependency single target is intentional
 2. **Token stays in UserDefaults** — do not move it back to the Keychain (ad-hoc signing would prompt for a password on every launch; a one-time migration already exists in SettingsStore)
 3. **Never commit real tokens/credentials** — in code, logs, screenshots, or commits
-4. **Don't invent platform APIs** — PlatformService talks to *private* endpoints of platform.deepseek.com (`get_user_summary` / `usage/amount` / `usage/cost`); verify against a real response before changing URLs, params, or response shapes, and update the selftest fixtures
+4. **Don't invent platform APIs** — PlatformService talks to *private* endpoints of platform.deepseek.com (`get_user_summary` / `usage/by_api_key/amount` / `usage/by_api_key/cost`, params `start`/`end` in Unix seconds, `tz` as second offset, `bucket` granularity); verify against a real response before changing URLs, params, or response shapes, and update the selftest fixtures
 5. **No data flow changes** — data comes only from DeepSeek's official endpoints; nothing is sent to third parties
 6. **No Xcode project / XCTest** — keep tests as lightweight swiftc self-tests; open an issue for heavier test tooling
 7. **Keep platform constraints** — macOS 14+, Swift 5 language mode

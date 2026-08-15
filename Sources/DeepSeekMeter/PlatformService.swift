@@ -95,52 +95,53 @@ struct PlatformService {
         return bizData
     }
 
-    /// 本月 token 用量（biz_data 是对象）
-    func fetchUsageAmount(token: String, month: Int, year: Int) async throws -> UsageData {
+    /// 按 API Key 的 token 用量（实时；start/end 为 Unix 秒，tz 为秒偏移，bucket=86400 按天分桶）
+    /// 与 usage/amount（当日数据延迟数小时～次日）不同，该接口当日数据实时
+    func fetchAPIKeyAmount(token: String, start: Int, end: Int, tz: Int) async throws -> APIKeyAmountData {
         struct Biz: Decodable {
             let bizCode: Int
             let bizMsg: String
-            let bizData: UsageData?
+            let bizData: APIKeyAmountData?
         }
         struct Resp: Decodable {
             let code: Int
             let msg: String
             let data: Biz?
         }
-        let response: Resp = try await get("/api/v0/usage/amount?month=\(month)&year=\(year)", token: token)
+        let response: Resp = try await get("/api/v0/usage/by_api_key/amount?start=\(start)&end=\(end)&tz=\(tz)&bucket=86400", token: token)
         try ensureSuccess(response.code, msg: response.msg)
         guard let data = response.data else {
-            throw PlatformError.api(code: response.code, msg: "amount 为空")
+            throw PlatformError.api(code: response.code, msg: "by_api_key amount 为空")
         }
         try ensureBizSuccess(data.bizCode, msg: data.bizMsg)
         guard let bizData = data.bizData else {
-            throw PlatformError.api(code: response.code, msg: "amount 为空")
+            throw PlatformError.api(code: response.code, msg: "by_api_key amount 为空")
         }
         return bizData
     }
 
-    /// 本月费用（biz_data 是数组，取第一个）
-    func fetchUsageCost(token: String, month: Int, year: Int) async throws -> UsageData {
+    /// 按 API Key 的费用（实时；start/end 为 Unix 秒，tz 为秒偏移，bucket=86400 按天分桶）
+    func fetchAPIKeyCost(token: String, start: Int, end: Int, tz: Int) async throws -> APIKeyCostData {
         struct Biz: Decodable {
             let bizCode: Int
             let bizMsg: String
-            let bizData: [UsageData]?
+            let bizData: APIKeyCostData?
         }
         struct Resp: Decodable {
             let code: Int
             let msg: String
             let data: Biz?
         }
-        let response: Resp = try await get("/api/v0/usage/cost?month=\(month)&year=\(year)", token: token)
+        let response: Resp = try await get("/api/v0/usage/by_api_key/cost?start=\(start)&end=\(end)&tz=\(tz)&bucket=86400", token: token)
         try ensureSuccess(response.code, msg: response.msg)
         guard let data = response.data else {
-            throw PlatformError.api(code: response.code, msg: "cost 为空")
+            throw PlatformError.api(code: response.code, msg: "by_api_key cost 为空")
         }
         try ensureBizSuccess(data.bizCode, msg: data.bizMsg)
-        guard let first = data.bizData?.first else {
-            throw PlatformError.api(code: response.code, msg: "cost 为空")
+        guard let bizData = data.bizData else {
+            throw PlatformError.api(code: response.code, msg: "by_api_key cost 为空")
         }
-        return first
+        return bizData
     }
 
     // MARK: - 请求
