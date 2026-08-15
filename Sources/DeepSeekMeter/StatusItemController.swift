@@ -127,6 +127,12 @@ final class StatusItemController: NSObject {
     }
 
     private static func icon(for model: AppModel?) -> NSImage? {
+        // 鲸鱼娘托盘图标（与 Windows 版一致）；未随包分发时回退 SF Symbol
+        if let path = Bundle.main.path(forResource: "whale-girl-tray", ofType: "png"),
+           let image = NSImage(contentsOfFile: path) {
+            image.size = NSSize(width: 18, height: 18)
+            return image
+        }
         let name = model?.isFetching == true ? "arrow.triangle.2.circlepath" : "sparkles"
         let image = NSImage(systemSymbolName: name, accessibilityDescription: "DeepSeek Meter")
         image?.isTemplate = true

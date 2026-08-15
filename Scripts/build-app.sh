@@ -20,11 +20,18 @@ mkdir -p "$APP_DIR/Contents/MacOS" "$APP_DIR/Contents/Resources"
 cp "$BIN" "$APP_DIR/Contents/MacOS/$APP_NAME"
 cp Scripts/Info.plist "$APP_DIR/Contents/Info.plist"
 
-# 应用图标（若已生成）
+# 应用图标（鲸鱼娘，与 Windows 版一致）
+echo "==> 生成应用图标"
+bash Scripts/make-icon.sh
 if [ -f "$BUILD_DIR/AppIcon.icns" ]; then
   echo "==> 打包应用图标"
   cp "$BUILD_DIR/AppIcon.icns" "$APP_DIR/Contents/Resources/AppIcon.icns"
   /usr/libexec/PlistBuddy -c "Add :CFBundleIconFile string AppIcon" "$APP_DIR/Contents/Info.plist" 2>/dev/null || true
+fi
+
+# 托盘图标（鲸鱼娘，与 Windows 版托盘一致）
+if [ -f "windows/assets/whale-girl-tray.png" ]; then
+  cp "windows/assets/whale-girl-tray.png" "$APP_DIR/Contents/Resources/whale-girl-tray.png"
 fi
 
 # 签名：优先 Developer ID（消除 Gatekeeper 提示），否则 ad-hoc
