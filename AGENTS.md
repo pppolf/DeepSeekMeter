@@ -9,7 +9,8 @@ DeepSeekMeter 是一个 **macOS 菜单栏小工具**（SwiftUI + AppKit）：实
 
 - 工具链：Swift 6（swift-tools-version 6.0），**Swift 5 语言模式**（Package.swift 中显式设置）
 - 平台：macOS 14+（Apple Silicon / Intel 均可），仅 macOS，无 iOS/iPadOS
-- 构建：Swift Package Manager，**无 Xcode 工程、无任何第三方依赖、单 target**
+- 移动端：iOS 版（`ios/`，开发中）与 Android 版（规划中），总体方案见 MOBILE-PLAN.md
+- 构建：Swift Package Manager，**无 Xcode 工程、无任何第三方依赖、单 target**（仅指 macOS 包；iOS 工程在 `ios/` 内，见第 8 节红线 13）
 - 测试：轻量自测（swiftc 直接编译运行，**不依赖 XCTest**）
 - CI：GitHub Actions（push main / PR 触发）；发布：打 `v*` 标签自动出 DMG Release
 - 用户文档：README.md（英文）+ README.zh-CN.md（中文），双语惯例
@@ -23,6 +24,9 @@ swift build -c release           # release 构建
 bash Scripts/run-tests.sh        # 运行自测（全绿才算通过）
 bash Scripts/build-app.sh release # 组装 build/DeepSeekMeter.app 并签名
 bash Scripts/install.sh          # 构建 + 安装到 /Applications 并启动
+
+# iOS 核心包自测（ios/DeepSeekMeterCore，改动核心逻辑后必须跑）
+swift run --package-path ios/DeepSeekMeterCore DeepSeekMeterCoreSelftest
 ```
 
 CI 的验证链：`swift build` → `swift build -c release` → `run-tests.sh` → `build-app.sh release` → 冒烟启动 6 秒。
@@ -51,6 +55,11 @@ windows/                         Windows 版（.NET 8 + WPF，与 macOS 版功�
   src/DeepSeekMeter/             WPF 应用：MainViewModel / TrayIconController / PopoverWindow / LoginWindow 等
   tests/DeepSeekMeter.Selftest/  轻量自测（控制台，零测试框架）
   README.md                      Windows 版说明（含与 macOS 版对应关系）
+ios/                             iOS 版（开发中，详见 MOBILE-PLAN.md）
+  DeepSeekMeterCore/             共享核心 Swift Package（PlatformService / Models / Formatting / TokenStoring，零第三方依赖）
+  DeepSeekMeter.xcodeproj        iOS App 工程（SwiftUI，Xcode 16 同步文件夹格式）
+  DeepSeekMeter/                 iOS App 源码（AppMain / TokenStore(Keychain) / Views/）
+  DeepSeekMeterCore/Sources/DeepSeekMeterCoreSelftest/  核心轻量自测（swift run 直接跑，不依赖 XCTest）
 Scripts/
   build-app.sh / install.sh / notarize.sh / run-tests.sh / make-icon.sh / generate-icon.swift
   Info.plist                     应用包信息（**版本号在这里改**）
@@ -126,6 +135,12 @@ Foundation / AppKit / SwiftUI / WebKit
 8. **不改语言基调**：代码注释、UI 文案用中文；文档遵循 README.md（EN）+ README.zh-CN.md（ZH）双语惯例
 9. **不破坏 CI**。合入前本地跑完整验证链；CI 红了先修复再继续
 10. **不提交产物与本地文件**：`.build/`、`build/`、`.DS_Store`、`*.xcuserstate`
+
+### 移动端红线（iOS / Android，追加条款）
+
+11. **移动端同样零第三方依赖**：iOS/Android 业务逻辑零第三方依赖；系统框架（URLSession / SwiftUI / WebKit / Security / WidgetKit，以及 Android 的 Compose / HttpURLConnection 等）与平台官方工具不视为第三方（与 Windows 版 WebView2 例外同理）
+12. **Token 存储分平台**：红线第 2 条仅适用于 macOS（ad-hoc 签名下钥匙串每次启动弹密码授权）；**iOS 用 Keychain（kSecClassGenericPassword）、Android 用 Keystore 加密后存 SharedPreferences**——移动端 App 有正式签名，钥匙串不会弹窗；同样不得把真实 Token 写进代码/日志/截图
+13. **移动端核心逻辑统一在 `ios/DeepSeekMeterCore`**（Swift 5 语言模式，与 Sources/DeepSeekMeter/ 逐文件对应，防三端漂移）；改动后必须跑核心自测（第 2 节命令）；`.xcodeproj` 只允许存在于 `ios/` 内，macOS 包保持无 Xcode 工程；新接口改动前先抓真实响应验证并同步更新自测样例 JSON（红线 4 同样适用于移动端）
 
 ## 9. 完成标准（Definition of Done）
 

@@ -7,7 +7,7 @@
 ![Windows](https://img.shields.io/badge/Windows-10%2B-blue)
 [English](README.md)
 
-一个轻量的 **macOS 菜单栏小工具**：实时查看 DeepSeek 账户的余额、消费和 Token 用量。点击菜单栏图标弹出悬浮窗，数据一目了然。同时提供**功能对齐的 Windows 版**（系统托盘），代码在 [`windows/`](windows/README.md)。
+一个轻量的 **macOS 菜单栏小工具**：实时查看 DeepSeek 账户的余额、消费和 Token 用量。点击菜单栏图标弹出悬浮窗，数据一目了然。同时提供**功能对齐的 Windows 版**（系统托盘，代码在 [`windows/`](windows/README.md)）与**开发中的 iOS 版**（代码在 [`ios/`](ios/README.md)，规划见 [MOBILE-PLAN.md](MOBILE-PLAN.md)）。
 
 ## ✨ 功能
 
@@ -103,6 +103,7 @@ Sources/DeepSeekMeter/           App 源码（SwiftUI + AppKit）
 Scripts/                         构建 / 安装 / 图标 / 自测脚本
 Scripts/selftest/                轻量单元测试（无需 Xcode）
 windows/                         Windows 版（.NET 8 + WPF，详见 windows/README.md）
+ios/                             iOS 版（开发中，详见 ios/README.md）
 ```
 
 ```bash
