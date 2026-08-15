@@ -192,7 +192,7 @@ struct MonthUsage: Identifiable {
     }
 
     /// 平台统计口径时区：北京时间（UTC+8）。macOS 14+ 系统内置该时区，无需回退；
-    /// 已通过真实响应验证 usage/cost、usage/amount 的 days 日期按北京时间计日
+    /// 已通过真实响应验证 usage/by_api_key/* 的桶时间按北京时间计日
     static let platformTimeZone = TimeZone(identifier: "Asia/Shanghai")!
 
     /// 平台按北京时间（UTC+8）计日与计月；App 统一用此时区判定「今日/本月」，
@@ -213,63 +213,77 @@ struct MonthUsage: Identifiable {
 
     // MARK: - by_api_key 序列聚合
 
-    /// 把 by_api_key 的天桶序列聚合成 MonthUsage（日期按北京时间归属，与 startTs 所在时区一致）
-    /// amountData 提供 token/请求，costData 提供费用（无费用数据时传 nil）
+    /// 把 by_api_key 的天桶序列聚合成 MonthUsage。
+    /// - startTs/endTs：查询窗口（Unix 秒），窗口外的桶会被忽略（防御越界数据）
+    /// - tzSeconds：桶所属时区的秒偏移（UTC+8 = 28800），决定日期归属与年月
+    /// - 费用只聚合 data 中第一个币种分组（与 usage/cost 旧实现「取第一个」一致），避免多币种混加
     static func aggregated(
         startTs: Int,
+        endTs: Int,
+        tzSeconds: Int,
         amountData: APIKeyAmountData?,
         costData: APIKeyCostData?
     ) -> MonthUsage {
+        let timeZone = TimeZone(secondsFromGMT: tzSeconds) ?? platformTimeZone
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = timeZone
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = timeZone
+
         let startDate = Date(timeIntervalSince1970: Double(startTs))
-        let calendar = platformCalendar
         let year = calendar.component(.year, from: startDate)
         let month = calendar.component(.month, from: startDate)
 
-        // 1. token/请求：按 (天, 模型) 与 (模型) 聚合
-        var amountByDayModel: [String: [String: Double]] = [:]
+        func dayString(_ ts: Int) -> String {
+            formatter.string(from: Date(timeIntervalSince1970: Double(ts)))
+        }
+        func inWindow(_ ts: Int) -> Bool { ts >= startTs && ts < endTs }
+
+        // 1. token/请求：day -> model -> type -> value
+        var amountByDay: [String: [String: [String: Double]]] = [:]
         var amountByModel: [String: [String: Double]] = [:]
         for series in amountData?.series ?? [] {
-            for bucket in series.buckets {
-                let day = dayFormatter.string(from: Date(timeIntervalSince1970: Double(bucket.time)))
+            for bucket in series.buckets where inWindow(bucket.time) {
+                let day = dayString(bucket.time)
                 for (type, amount) in bucket.usage {
                     let value = Double(amount) ?? 0
-                    amountByDayModel["\(day)|\(series.model)", default: [:]][type, default: 0] += value
+                    amountByDay[day, default: [:]][series.model, default: [:]][type, default: 0] += value
                     amountByModel[series.model, default: [:]][type, default: 0] += value
                 }
             }
         }
 
-        // 2. 费用：按 (天, 模型) 与 (模型) 聚合（统一记为 COST 类型）
-        var costByDayModel: [String: Double] = [:]
+        // 2. 费用：只取第一个币种分组，day -> model -> 金额（统一记为 COST 类型）
+        var costByDay: [String: [String: Double]] = [:]
         var costByModel: [String: Double] = [:]
-        for group in costData?.data ?? [] {
+        if let group = costData?.data.first {
             for series in group.series {
-                for bucket in series.buckets {
-                    let day = dayFormatter.string(from: Date(timeIntervalSince1970: Double(bucket.time)))
+                for bucket in series.buckets where inWindow(bucket.time) {
+                    let day = dayString(bucket.time)
                     let value = Double(bucket.cost) ?? 0
-                    costByDayModel["\(day)|\(series.model)", default: 0] += value
+                    costByDay[day, default: [:]][series.model, default: 0] += value
                     costByModel[series.model, default: 0] += value
                 }
             }
         }
 
         // 3. 组装（key 与 model 均排序，保证输出稳定）
-        let sortedKeys = amountByDayModel.keys.sorted()
-        let amountDays = sortedKeys.map { key -> UsageDay in
-            let parts = key.split(separator: "|")
-            let usages = amountByDayModel[key]!.sorted { $0.key < $1.key }
-                .map { UsageItem(type: $0.key, amount: String($0.value)) }
-            return UsageDay(date: String(parts[0]), data: [ModelUsage(model: String(parts[1]), usage: usages)])
+        let amountDays = amountByDay.keys.sorted().map { day -> UsageDay in
+            UsageDay(date: day, data: amountByDay[day]!.keys.sorted().map { model in
+                ModelUsage(model: model, usage: amountByDay[day]![model]!.sorted { $0.key < $1.key }
+                    .map { UsageItem(type: $0.key, amount: String($0.value)) })
+            })
         }
         let amountModels = amountByModel.keys.sorted().map { model in
             ModelUsage(model: model, usage: amountByModel[model]!.sorted { $0.key < $1.key }
                 .map { UsageItem(type: $0.key, amount: String($0.value)) })
         }
-
-        let costDayKeys = costByDayModel.keys.sorted()
-        let costDays = costDayKeys.map { key -> UsageDay in
-            let parts = key.split(separator: "|")
-            return UsageDay(date: String(parts[0]), data: [ModelUsage(model: String(parts[1]), usage: [UsageItem(type: "COST", amount: String(costByDayModel[key]!))])])
+        let costDays = costByDay.keys.sorted().map { day -> UsageDay in
+            UsageDay(date: day, data: costByDay[day]!.keys.sorted().map { model in
+                ModelUsage(model: model, usage: [UsageItem(type: "COST", amount: String(costByDay[day]![model]!))])
+            })
         }
         let costModels = costByModel.keys.sorted().map { model in
             ModelUsage(model: model, usage: [UsageItem(type: "COST", amount: String(costByModel[model]!))])

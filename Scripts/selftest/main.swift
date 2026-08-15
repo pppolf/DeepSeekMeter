@@ -179,10 +179,10 @@ do {
 // 10. by_api_key 实时接口：解码 + 聚合（start/end 为 Unix 秒，tz=28800，bucket=86400 按天）
 // 时间戳：1785513600 = 北京 8/1 00:00，1785600000 = 北京 8/2 00:00
 let byKeyAmountJSON = """
-{"code":0,"msg":"","data":{"biz_code":0,"biz_msg":"","biz_data":{"start":1785513600,"end":1788192000,"bucket":86400,"models":["deepseek-v4-pro"],"series":[{"api_key":{"tracking_id":"t1","name":"github","sensitive_id":"sk-xxx","valid":true},"model":"deepseek-v4-pro","buckets":[{"time":1785513600,"usage":{"REQUEST":"2","RESPONSE_TOKEN":"100"}},{"time":1785600000,"usage":{"REQUEST":"5","RESPONSE_TOKEN":"200"}}]}]}}}
+{"code":0,"msg":"","data":{"biz_code":0,"biz_msg":"","biz_data":{"start":1785513600,"end":1788192000,"bucket":86400,"models":["deepseek-v4-pro"],"series":[{"api_key":{"tracking_id":"test-tracking","name":"test-key","sensitive_id":"sk-xxx","valid":true},"model":"deepseek-v4-pro","buckets":[{"time":1785513600,"usage":{"REQUEST":"2","RESPONSE_TOKEN":"100"}},{"time":1785600000,"usage":{"REQUEST":"5","RESPONSE_TOKEN":"200"}}]}]}}}
 """
 let byKeyCostJSON = """
-{"code":0,"msg":"","data":{"biz_code":0,"biz_msg":"","biz_data":{"start":1785513600,"end":1788192000,"bucket":86400,"models":["deepseek-v4-pro"],"data":[{"currency":"CNY","series":[{"api_key":{"tracking_id":"t1","name":"github","sensitive_id":"sk-xxx","valid":true},"model":"deepseek-v4-pro","buckets":[{"time":1785513600,"cost":"1.5"},{"time":1785600000,"cost":"2.5"}]}]}]}}}
+{"code":0,"msg":"","data":{"biz_code":0,"biz_msg":"","biz_data":{"start":1785513600,"end":1788192000,"bucket":86400,"models":["deepseek-v4-pro"],"data":[{"currency":"CNY","series":[{"api_key":{"tracking_id":"test-tracking","name":"test-key","sensitive_id":"sk-xxx","valid":true},"model":"deepseek-v4-pro","buckets":[{"time":1785513600,"cost":"1.5"},{"time":1785600000,"cost":"2.5"}]}]}]}}}
 """
 do {
     struct AKBiz: Decodable { let bizCode: Int; let bizMsg: String; let bizData: APIKeyAmountData }
@@ -193,7 +193,7 @@ do {
     let amountData = amountResp.data?.bizData
     check(amountData?.series.count == 1, "by_api_key amount series 数")
     check(amountData?.series.first?.buckets.count == 2, "by_api_key amount 桶数")
-    check(amountData?.series.first?.apiKey.name == "github", "by_api_key api_key 元信息")
+    check(amountData?.series.first?.apiKey.name == "test-key" && amountData?.series.first?.apiKey.trackingId == "test-tracking", "by_api_key api_key 元信息（占位符）")
 
     struct CKBiz: Decodable { let bizCode: Int; let bizMsg: String; let bizData: APIKeyCostData }
     struct CKResp: Decodable { let code: Int; let data: CKBiz? }
@@ -202,7 +202,7 @@ do {
     check(costData?.data.first?.currency == "CNY", "by_api_key cost 币种")
 
     // 聚合：按天 + 按模型
-    let usage = MonthUsage.aggregated(startTs: 1785513600, amountData: amountData, costData: costData)
+    let usage = MonthUsage.aggregated(startTs: 1785513600, endTs: 1788192000, tzSeconds: 28800, amountData: amountData, costData: costData)
     check(usage.year == 2026 && usage.month == 8, "聚合年月（北京时间）")
     check(usage.amountDays.count == 2, "聚合 amount 天数")
     check(usage.amountDays.first?.date == "2026-08-01", "聚合 amount 首日")
@@ -213,8 +213,28 @@ do {
     check(abs(usage.cost(on: Date(timeIntervalSince1970: 1785513600)) - 1.5) < 0.001, "聚合 8/1 费用 1.5")
     check(abs(usage.totalCost - 4.0) < 0.001, "聚合本月费用 1.5+2.5")
     // 空数据聚合不崩溃
-    let emptyUsage = MonthUsage.aggregated(startTs: 1785513600, amountData: nil, costData: nil)
+    let emptyUsage = MonthUsage.aggregated(startTs: 1785513600, endTs: 1788192000, tzSeconds: 28800, amountData: nil, costData: nil)
     check(emptyUsage.amountDays.isEmpty && emptyUsage.totalCost == 0, "空数据聚合为 0")
+    // 边界 1：窗口外（下月）的桶被忽略；窗口内 8/31 的桶正常计入
+    // 1788105600 = 北京 8/31 00:00，1788192000 = 北京 9/1 00:00（= endTs，窗口外）
+    let monthEdgeJSON = """
+{"code":0,"msg":"","data":{"biz_code":0,"biz_msg":"","biz_data":{"start":1785513600,"end":1788192000,"bucket":86400,"models":["deepseek-v4-pro"],"series":[{"api_key":{"tracking_id":"test-tracking","name":"test-key","sensitive_id":"sk-xxx","valid":true},"model":"deepseek-v4-pro","buckets":[{"time":1788105600,"usage":{"REQUEST":"3"}},{"time":1788192000,"usage":{"REQUEST":"99"}}]}]}}}
+"""
+    struct EdgeBiz: Decodable { let bizCode: Int; let bizMsg: String; let bizData: APIKeyAmountData }
+    struct EdgeResp: Decodable { let code: Int; let data: EdgeBiz? }
+    let edge = try decoder.decode(EdgeResp.self, from: Data(monthEdgeJSON.utf8)).data?.bizData
+    let edgeUsage = MonthUsage.aggregated(startTs: 1785513600, endTs: 1788192000, tzSeconds: 28800, amountData: edge, costData: nil)
+    check(edgeUsage.amountDays.count == 1 && edgeUsage.amountDays.first?.date == "2026-08-31", "窗口内 8/31 桶计入")
+    check(edgeUsage.amountModels.first?.requests == 3, "窗口外 9/1 桶被忽略（99 不计入）")
+    // 边界 2：多币种分组只聚合第一个（CNY），USD 组不混加
+    let multiCurrencyJSON = """
+{"code":0,"msg":"","data":{"biz_code":0,"biz_msg":"","biz_data":{"start":1785513600,"end":1788192000,"bucket":86400,"models":["deepseek-v4-pro"],"data":[{"currency":"CNY","series":[{"api_key":{"tracking_id":"test-tracking","name":"test-key","sensitive_id":"sk-xxx","valid":true},"model":"deepseek-v4-pro","buckets":[{"time":1785513600,"cost":"1.0"}]}]},{"currency":"USD","series":[{"api_key":{"tracking_id":"test-tracking","name":"test-key","sensitive_id":"sk-xxx","valid":true},"model":"deepseek-v4-pro","buckets":[{"time":1785513600,"cost":"5.0"}]}]}]}}}
+"""
+    struct MCBiz: Decodable { let bizCode: Int; let bizMsg: String; let bizData: APIKeyCostData }
+    struct MCResp: Decodable { let code: Int; let data: MCBiz? }
+    let mc = try decoder.decode(MCResp.self, from: Data(multiCurrencyJSON.utf8)).data?.bizData
+    let mcUsage = MonthUsage.aggregated(startTs: 1785513600, endTs: 1788192000, tzSeconds: 28800, amountData: nil, costData: mc)
+    check(abs(mcUsage.totalCost - 1.0) < 0.001, "多币种只聚合第一个分组（CNY 1.0，USD 5.0 不混加）")
 } catch {
     check(false, "by_api_key 解码抛错：\(error)")
 }

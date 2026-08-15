@@ -121,24 +121,30 @@ final class AppModel: ObservableObject {
             let now = Date()
             let comps = calendar.dateComponents([.year, .month], from: now)
             guard let start = calendar.date(from: DateComponents(year: comps.year, month: comps.month, day: 1)),
-                  let end = calendar.date(byAdding: .month, value: 1, to: start) else { return }
+                  let end = calendar.date(byAdding: .month, value: 1, to: start) else {
+                throw PlatformError.decoding("无法计算本月时间范围")
+            }
             let tz = 8 * 3600 // UTC+8（北京时间），与平台计日口径一致
+            let startTs = Int(start.timeIntervalSince1970)
+            let endTs = Int(end.timeIntervalSince1970)
             // by_api_key 接口实时返回当日数据（usage/amount、usage/cost 有数小时～次日延迟）
             async let amountFuture = platformService.fetchAPIKeyAmount(
                 token: settings.platformToken,
-                start: Int(start.timeIntervalSince1970),
-                end: Int(end.timeIntervalSince1970),
+                start: startTs,
+                end: endTs,
                 tz: tz
             )
             async let costFuture = platformService.fetchAPIKeyCost(
                 token: settings.platformToken,
-                start: Int(start.timeIntervalSince1970),
-                end: Int(end.timeIntervalSince1970),
+                start: startTs,
+                end: endTs,
                 tz: tz
             )
             let (amountData, costData) = try await (amountFuture, costFuture)
             monthUsage = MonthUsage.aggregated(
-                startTs: Int(start.timeIntervalSince1970),
+                startTs: startTs,
+                endTs: endTs,
+                tzSeconds: tz,
                 amountData: amountData,
                 costData: costData
             )
