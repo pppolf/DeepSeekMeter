@@ -92,6 +92,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Core drift check（macOS 核心改动需同步到 iOS 核心包）
+        run: bash Scripts/check-core-drift.sh
+
       - name: Core self-tests（核心包，macOS 上直接跑，无需模拟器）
         run: swift run --package-path ios/DeepSeekMeterCore DeepSeekMeterCoreSelftest
 
