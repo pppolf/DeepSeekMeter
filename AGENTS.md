@@ -25,8 +25,8 @@ bash Scripts/run-tests.sh        # 运行自测（全绿才算通过）
 bash Scripts/build-app.sh release # 组装 build/DeepSeekMeter.app 并签名
 bash Scripts/install.sh          # 构建 + 安装到 /Applications 并启动
 
-# iOS 核心包自测（ios/DeepSeekMeterCore，改动核心逻辑后必须跑）
-swift run --package-path ios/DeepSeekMeterCore DeepSeekMeterCoreSelftest
+# iOS 版验证（核心包自测必跑；有 Xcode 时还会构建 App 冒烟）
+bash Scripts/run-ios-tests.sh
 ```
 
 CI 的验证链：`swift build` → `swift build -c release` → `run-tests.sh` → `build-app.sh release` → 冒烟启动 6 秒。
@@ -61,7 +61,7 @@ ios/                             iOS 版（开发中，详见 MOBILE-PLAN.md）
   DeepSeekMeter/                 iOS App 源码（AppMain / TokenStore(Keychain) / Views/）
   DeepSeekMeterCore/Sources/DeepSeekMeterCoreSelftest/  核心轻量自测（swift run 直接跑，不依赖 XCTest）
 Scripts/
-  build-app.sh / install.sh / notarize.sh / run-tests.sh / make-icon.sh / generate-icon.swift
+  build-app.sh / install.sh / notarize.sh / run-tests.sh / run-ios-tests.sh / make-icon.sh / generate-icon.swift
   Info.plist                     应用包信息（**版本号在这里改**）
   selftest/main.swift            轻量自测源码（swiftc 编译运行）
 .github/workflows/
