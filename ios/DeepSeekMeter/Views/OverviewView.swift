@@ -104,7 +104,8 @@ struct OverviewView: View {
 
     private var todayCard: some View {
         let usage = appModel.monthUsage
-        let today = usage?.tokens(on: Date()) ?? (0, 0, 0, 0)
+        // 注意：兜底元组必须带标签，否则与可选元组合并后标签丢失（编译器报 value has no member）
+        let today = usage?.tokens(on: Date()) ?? (requests: 0, response: 0, cacheHit: 0, cacheMiss: 0)
         let todayCost = usage?.cost(on: Date()) ?? 0
         return VStack(alignment: .leading, spacing: 12) {
             Text("今日概览")

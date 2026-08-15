@@ -1,24 +1,22 @@
 import SwiftUI
 import DeepSeekMeterCore
 
-/// DeepSeekMeter iOS 版入口（SwiftUI App 生命周期）。
+/// DeepSeekMeter iOS 版入口（SwiftUI App 生命周期 + UIApplicationDelegate 适配）。
 /// 组装：KeychainTokenStore -> AppModel -> ContentView（依赖注入，便于预览与测试）；
-/// 启动时注册前台轮询与后台刷新调度，后台任务经 SwiftUI .backgroundTask 承接。
+/// 后台任务在 AppDelegate 中手动注册（BGTaskScheduler），前台轮询在此启动并注入 AppModel 引用。
 @main
 struct DeepSeekMeterApp: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var appModel = AppModel(tokenStore: KeychainTokenStore())
 
     var body: some Scene {
         WindowGroup {
             ContentView(appModel: appModel)
                 .task {
+                    AppDelegate.appModel = appModel
                     appModel.startPolling()
                     BackgroundRefreshService.schedule()
                 }
-        }
-        .backgroundTask(.appRefresh(BackgroundRefreshService.taskIdentifier)) { task in
-            await BackgroundRefreshService.refresh(appModel: appModel)
-            task.setTaskCompleted(success: true)
         }
     }
 }
