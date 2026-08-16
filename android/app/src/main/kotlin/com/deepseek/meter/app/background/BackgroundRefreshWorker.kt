@@ -27,7 +27,8 @@ class BackgroundRefreshWorker private constructor(
 
     /**
      * WorkManager 反射要求 (Context, WorkerParameters) 构造器（默认 WorkerFactory 用它实例化）；
-     * 生产用默认实现，测试可经主构造器注入 stub（与 AppModel 注入 PlatformHttp 的边界一致）。
+     * 生产用默认实现。测试可经主构造器注入 stub：PlatformService 的注入边界与其内部一致——
+     * 传入 PlatformService(stubPlatformHttp) 即可 mock 网络层（与 AppModel 同模式，无需新增接口）。
      */
     constructor(appContext: Context, params: WorkerParameters) : this(appContext, params, PlatformService())
 
@@ -79,7 +80,7 @@ class BackgroundRefreshWorker private constructor(
     }
 
     companion object {
-        private const val TAG = "BackgroundRefreshWorker"
+        private const val TAG = "DeepSeekMeter/BackgroundRefreshWorker"
         /** 后台刷新相关 SharedPreferences 名（SettingsScreen / 本 Worker 共用） */
         const val PREFS_NAME = "deepseek_meter_background"
         /** 低余额通知开关（设置页写入；Worker 每次执行前检查） */
