@@ -288,7 +288,8 @@ class TokenLoginWebView(
         return try {
             val popup = createPopupWebView()
             popupWebView = popup
-            val transport = WebView.WebViewTransport()
+            // WebViewTransport 是 WebView 的 inner class：Kotlin 必须以 WebView 实例为 receiver 构造
+        val transport = popup.WebViewTransport()
             transport.webView = popup
             resultMsg.obj = transport
             resultMsg.sendToTarget()
