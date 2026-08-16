@@ -10,10 +10,11 @@ import com.deepseek.meter.core.LowBalancePolicy
 import com.deepseek.meter.core.PlatformException
 import com.deepseek.meter.core.PlatformService
 import com.deepseek.meter.core.RefreshDecision
+import android.util.Log
 
 /**
  * 后台余额刷新 Worker（Issue #15）：只调 get_user_summary 做低余额检查，
- * 不拉完整用量（省电、省流量、省后台执行时间）。Best Effort，由系统调度。
+ * 不拉完整用量（省电、省流量、省后台执行时间）。尽力而为（不保证精确时间），由系统调度。
  *
  * 安全边界：Token 严禁进入 WorkManager InputData（会落 WorkManager 数据库），
  * 由 Worker 自行从 Keystore 读取；错误映射复用 :core 的 BackgroundRefreshDecision。
@@ -24,14 +25,16 @@ class BackgroundRefreshWorker(
 ) : Worker(appContext, params) {
 
     override fun doWork(): Result {
-        val prefs = applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val prefs = applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         // 1. 防御性 early-return：开关关闭时直接成功、不联网（关闭后即使任务被系统调度也不打扰）
         if (!prefs.getBoolean(KEY_ALERTS_ENABLED, false)) return Result.success()
 
         // 2. 从 Keystore 读 Token（解密失败按未登录处理，不 Crash）
         val token = try {
             KeystoreTokenStore(applicationContext).loadToken()
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            // 仅记录固定文案，不输出 Token/密文（红线 3）
+            Log.w(TAG, "后台刷新：Token 读取失败，按未登录处理", e)
             null
         }
         if (token.isNullOrEmpty()) return Result.success()
@@ -69,7 +72,9 @@ class BackgroundRefreshWorker(
     }
 
     companion object {
-        private const val PREFS = "deepseek_meter_background"
+        private const val TAG = "DeepSeekMeter"
+        /** 后台刷新相关 SharedPreferences 名（SettingsScreen / 本 Worker 共用） */
+        const val PREFS_NAME = "deepseek_meter_background"
         /** 低余额通知开关（设置页写入；Worker 每次执行前检查） */
         const val KEY_ALERTS_ENABLED = "lowBalanceAlertsEnabled"
         /** 同一低余额周期是否已提醒（策略返回的状态持久化于此） */
