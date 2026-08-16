@@ -75,7 +75,8 @@ class LowBalancePolicyTest {
     @Test
     fun customThreshold() {
         assertTrue(evaluate(0.9, alerted = false, threshold = 2.0).shouldNotify)
-        assertFalse(evaluate(1.5, alerted = false, threshold = 2.0).shouldNotify)
+        assertFalse(evaluate(2.0, alerted = false, threshold = 2.0).shouldNotify)
+        assertFalse(evaluate(2.5, alerted = false, threshold = 2.0).shouldNotify)
     }
 
     // 决策结果可作为下次输入往返（调用方持久化契约）
