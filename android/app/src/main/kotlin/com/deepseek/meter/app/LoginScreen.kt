@@ -157,6 +157,15 @@ class TokenLoginWebView(
     /** popup 的关闭按钮（第三方 IdP 拒绝 embedded WebView 时给用户的明确出口） */
     private var popupCloseButton: AndroidButton? = null
 
+    // 注意：以下状态字段必须先于 init 初始化——init 会调用 startPolling()，
+    // 若声明在 init 之后，轮询 Timer 在登录页首次打开时仍为 null（真机发现：A3 遗留的 NPE 崩溃）
+    private val pollTimer = Timer()
+    private var isChecking = false
+    private var isValidating = false
+    private var tokenReceived = false
+    private var lastSignature = ""
+    private var polling = true
+
     init {
         settings.javaScriptEnabled = true
         settings.domStorageEnabled = true
@@ -181,13 +190,6 @@ class TokenLoginWebView(
         loadUrl(LOGIN_URL)
         startPolling()
     }
-
-    private val pollTimer = Timer()
-    private var isChecking = false
-    private var isValidating = false
-    private var tokenReceived = false
-    private var lastSignature = ""
-    private var polling = true
 
     private fun startPolling() {
         pollTimer.schedule(object : TimerTask() {
