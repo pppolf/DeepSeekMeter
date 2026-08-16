@@ -28,7 +28,7 @@ class LowBalanceNotifier(private val context: Context) {
         val m = manager ?: return
         m.createNotificationChannel(
             NotificationChannel(CHANNEL_ID, CHANNEL_NAME, NotificationManager.IMPORTANCE_DEFAULT).apply {
-                description = "账户余额低于 1.0（当前币种单位）时提醒"
+                description = "账户余额低于 " + format(LowBalancePolicy.DEFAULT_THRESHOLD) + "（当前币种单位）时提醒"
             }
         )
     }
