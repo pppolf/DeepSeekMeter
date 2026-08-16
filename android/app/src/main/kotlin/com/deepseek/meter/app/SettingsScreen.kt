@@ -53,10 +53,12 @@ fun SettingsScreen(state: AppModel.State, controller: AppController, onLogin: ()
     // ---- 低余额通知状态（Issue #15） ----
     val notifier = remember { LowBalanceNotifier(context) }
     val bgPrefs = remember {
-        context.getSharedPreferences("deepseek_meter_background", Context.MODE_PRIVATE)
+        context.getSharedPreferences(BackgroundRefreshWorker.PREFS_NAME, Context.MODE_PRIVATE)
     }
     var alertsEnabled by remember { mutableStateOf(bgPrefs.getBoolean(BackgroundRefreshWorker.KEY_ALERTS_ENABLED, false)) }
     var showPermissionNote by remember { mutableStateOf(false) }
+    // 拒绝计数（权限三态）：0=未请求；1=曾拒绝，可再次点击重试；≥2=引导系统设置，不再弹框
+    var permissionDenialCount by remember { mutableStateOf(0) }
 
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -65,9 +67,11 @@ fun SettingsScreen(state: AppModel.State, controller: AppController, onLogin: ()
             bgPrefs.edit().putBoolean(BackgroundRefreshWorker.KEY_ALERTS_ENABLED, true).apply()
             alertsEnabled = true
             showPermissionNote = false
+            permissionDenialCount = 0
             BackgroundRefreshScheduler.schedule(context)
         } else {
-            // 拒绝（或渠道在系统设置中被关闭）：保持关闭，展示系统设置入口，不自动骚扰式弹窗
+            // 拒绝（或渠道在系统设置中被关闭）：保持关闭，记录拒绝次数，展示系统设置入口
+            permissionDenialCount += 1
             showPermissionNote = true
         }
     }
@@ -75,8 +79,13 @@ fun SettingsScreen(state: AppModel.State, controller: AppController, onLogin: ()
     fun enableAlerts() {
         notifier.createChannel()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !notifier.areNotificationsEnabled()) {
-            // Android 13+ 未授予：请求权限（系统决定是否展示对话框）
-            permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            // Android 13+ 未授予：首次点击请求；拒绝一次允许再次点击重试；
+            // 拒绝两次以上直接引导系统设置，不再骚扰式弹框（系统对多次拒绝通常也不再展示对话框）
+            if (permissionDenialCount >= 2) {
+                showPermissionNote = true
+            } else {
+                permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
         } else {
             // 已授权（或 <13 无运行时权限）：启用并注册唯一周期任务
             bgPrefs.edit().putBoolean(BackgroundRefreshWorker.KEY_ALERTS_ENABLED, true).apply()
@@ -87,8 +96,10 @@ fun SettingsScreen(state: AppModel.State, controller: AppController, onLogin: ()
     }
 
     fun disableAlerts() {
-        bgPrefs.edit().putBoolean(BackgroundRefreshWorker.KEY_ALERTS_ENABLED, false).apply()
-        bgPrefs.edit().remove(BackgroundRefreshWorker.KEY_ALERTED).apply() // 重置提醒状态
+        bgPrefs.edit()
+            .putBoolean(BackgroundRefreshWorker.KEY_ALERTS_ENABLED, false)
+            .remove(BackgroundRefreshWorker.KEY_ALERTED) // 重置提醒状态
+            .apply()
         alertsEnabled = false
         showPermissionNote = false
         BackgroundRefreshScheduler.cancel(context)
@@ -173,7 +184,10 @@ fun SettingsScreen(state: AppModel.State, controller: AppController, onLogin: ()
                 if (showPermissionNote) {
                     Spacer(Modifier.height(8.dp))
                     Text(
-                        "通知权限未开启：请在系统设置中允许 DeepSeekMeter 通知后重试",
+                        if (permissionDenialCount >= 2)
+                            "通知权限已关闭：请在系统设置中允许 DeepSeekMeter 通知后重试"
+                        else
+                            "通知权限被拒绝：可再次点击开关重试，或打开系统设置开启",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.error
                     )
