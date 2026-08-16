@@ -21,7 +21,7 @@ object LowBalancePolicy {
      *  - 0 < balance < threshold 且 alerted == true：同一低余额周期 → 不重复通知；
      *  - balance >= threshold：余额恢复 → 不通知，alerted 重置（下次跌破可再次提醒）。
      *
-     * @param balance   当前钱包余额数值（币种由调用方保证与 threshold 一致）
+     * @param balance   当前钱包余额数值（来自 get_user_summary 的 normalWallets，调用方保证与 threshold 同一币种）
      * @param threshold 低余额阈值（默认 1.0，表示当前钱包币种的一个单位）
      * @param alerted   上次提醒状态（App 层从 SharedPreferences 读入）
      */
