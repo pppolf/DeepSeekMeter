@@ -40,6 +40,8 @@ fun rememberAppController(): AppController {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val controller = remember { AppController(context.applicationContext) }
+    // 以 lifecycleOwner 为 key：观察者仅在生命周期宿主变化时重建；
+    // Activity 生命周期内该值不变，effect 只执行一次（注册观察者 + 初始状态补偿）
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
