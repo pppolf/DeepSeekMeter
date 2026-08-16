@@ -3,9 +3,16 @@ package com.deepseek.meter.app
 import android.annotation.SuppressLint
 import android.content.Context
 import android.net.Uri
+import android.os.Message
+import android.view.Gravity
+import android.view.ViewGroup
 import android.webkit.WebChromeClient
+import android.webkit.WebResourceError
+import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.widget.Button as AndroidButton
+import android.widget.FrameLayout
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -40,6 +47,8 @@ import java.util.TimerTask
 /**
  * 登录页：内嵌官方登录页（WebView）+ localStorage 轮询提取 Token，原生侧校验。
  * 机制对齐 iOS LoginWebView / macOS LoginWindowController：域名白名单、候选提取、留在 WebView 内。
+ * Issue #14：window.open / OAuth popup 在 App 内承接（onCreateWindow + 临时子 WebView），
+ * 不跳系统浏览器；第三方 IdP 拒绝 embedded WebView 时清晰失败 + 手动 Token fallback。
  */
 @Composable
 fun LoginScreen(
@@ -76,14 +85,26 @@ fun LoginScreen(
         }
         AndroidView(
             factory = { ctx ->
+                // 外层容器：onCreateWindow 承接的 popup 子 WebView 与关闭按钮挂载到这里（Issue #14）
+                val container = FrameLayout(ctx)
                 TokenLoginWebView(
                     ctx,
+                    container,
                     onToken = onSaveToken,
                     onStatus = { s -> status = s }
-                ).also { webViewRef = it }
+                ).also { webViewRef = it }.also {
+                    container.addView(
+                        it,
+                        FrameLayout.LayoutParams(
+                            ViewGroup.LayoutParams.MATCH_PARENT,
+                            ViewGroup.LayoutParams.MATCH_PARENT
+                        )
+                    )
+                }
+                container
             },
             modifier = Modifier.weight(1f),
-            onRelease = { it.stopPolling() }
+            onRelease = { webViewRef?.stopPolling() }
         )
         Text(
             status,
@@ -118,26 +139,46 @@ fun LoginScreen(
     }
 }
 
-/// WebView 封装：官方登录页 + localStorage 轮询提取 Token（对齐 iOS LoginWebView.Coordinator）
+/// WebView 封装：官方登录页 + localStorage 轮询提取 Token（对齐 iOS LoginWebView.Coordinator）。
+/// Issue #14：支持 window.open / OAuth popup 的 App 内承接（onCreateWindow + 临时子 WebView），
+/// 并遵守能力边界：不伪装 UA、不绕过第三方 IdP 对 embedded WebView 的限制，
+/// 提供关闭出口与手动 Token fallback。
 @SuppressLint("SetJavaScriptEnabled")
 class TokenLoginWebView(
     context: Context,
+    private val container: FrameLayout,
     private val onToken: (String, (Boolean) -> Unit) -> Unit,
     private val onStatus: (String) -> Unit
 ) : WebView(context) {
 
+    /** 当前 popup 子 WebView（同一时间只保留一个，新窗口替换旧的） */
+    private var popupWebView: WebView? = null
+
+    /** popup 的关闭按钮（第三方 IdP 拒绝 embedded WebView 时给用户的明确出口） */
+    private var popupCloseButton: AndroidButton? = null
+
     init {
         settings.javaScriptEnabled = true
         settings.domStorageEnabled = true
-        settings.userAgentString =
-            "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36"
+        // 必须开启：window.open / OAuth popup 才会回调 onCreateWindow，否则新窗口会被主 WebView 吞掉
+        settings.setSupportMultipleWindows(true)
+        settings.userAgentString = USER_AGENT
         webViewClient = object : WebViewClient() {
             override fun onPageFinished(view: WebView, url: String) {
                 checkToken()
             }
         }
-        webChromeClient = WebChromeClient()
-        loadUrl("https://platform.deepseek.com/")
+        webChromeClient = object : WebChromeClient() {
+            override fun onCreateWindow(
+                view: WebView,
+                isDialog: Boolean,
+                isUserGesture: Boolean,
+                resultMsg: Message
+            ): Boolean {
+                return handleCreateWindow(resultMsg)
+            }
+        }
+        loadUrl(LOGIN_URL)
         startPolling()
     }
 
@@ -169,6 +210,11 @@ class TokenLoginWebView(
 
     fun stopPolling() {
         pollTimer.cancel()
+        closePopup()
+        // 登录流程结束（成功/释放）：按 WebView.destroy() 的调用契约，先从容器移除再销毁，
+        // 避免页面 JS 与回调残留；容器与 WebView 的相互引用随视图树整体回收
+        (parent as? ViewGroup)?.removeView(this)
+        destroy()
     }
 
     private fun checkToken() {
@@ -231,6 +277,127 @@ class TokenLoginWebView(
         }
     }
 
+    // MARK: - Popup / OAuth 承接（Issue #14）
+
+    /**
+     * window.open / OAuth popup 承接：在 App 内创建临时子 WebView，不跳系统浏览器。
+     * 只解决 popup 承载本身；第三方 IdP 若主动拒绝 embedded WebView（如 Google Sign-In），
+     * 不做任何 UA 伪装或脚本绕过，用户可点右上角 ✕ 关闭弹窗，改用手动粘贴 Token。
+     */
+    private fun handleCreateWindow(resultMsg: Message): Boolean {
+        return try {
+            val popup = createPopupWebView()
+            popupWebView = popup
+            // WebViewTransport 是 WebView 的 inner class：Kotlin 必须以 WebView 实例为 receiver 构造
+        val transport = popup.WebViewTransport()
+            transport.webView = popup
+            resultMsg.obj = transport
+            resultMsg.sendToTarget()
+            onStatus("检测到登录弹窗，请在弹窗内完成登录；无法完成时可点 ✕ 关闭")
+            true
+        } catch (_: Exception) {
+            // 承接失败（极端情况）：交回 WebView 默认处理（主窗口内导航），绝不让弹窗流程卡死
+            false
+        }
+    }
+
+    /** 创建 popup 子 WebView（替换已存在的旧弹窗）；与主 WebView 共享 localStorage / cookie */
+    private fun createPopupWebView(): WebView {
+        closePopup()
+        var sawThirdPartyHost = false
+        val child = WebView(context).apply {
+            settings.javaScriptEnabled = true
+            settings.domStorageEnabled = true
+            settings.setSupportMultipleWindows(true)
+            settings.userAgentString = USER_AGENT
+            webViewClient = object : WebViewClient() {
+                override fun onPageFinished(view: WebView, url: String) {
+                    val host = Uri.parse(url).host ?: return
+                    val isDeepSeek = host == "deepseek.com" || host.endsWith(".deepseek.com")
+                    if (!isDeepSeek) {
+                        // 记录离开过 DeepSeek 域名：区分「OAuth 回跳」与「纯 DeepSeek 弹窗（如扫码）」
+                        sawThirdPartyHost = true
+                        return
+                    }
+                    // 第三方 IdP 完成授权后重定向回 DeepSeek：关闭弹窗，主窗口轮询将读取新登录态
+                    if (sawThirdPartyHost) {
+                        closePopup()
+                        onStatus("登录弹窗已返回 DeepSeek，正在读取登录态…")
+                        checkToken()
+                    }
+                }
+
+                override fun onReceivedError(
+                    view: WebView,
+                    request: WebResourceRequest,
+                    error: WebResourceError
+                ) {
+                    // 主资源加载失败：给用户明确出口，不 Crash、不无限循环
+                    if (request.isForMainFrame) {
+                        onStatus("登录弹窗加载失败，可点右上角 ✕ 关闭，改用其他登录方式或手动粘贴 Token")
+                    }
+                }
+            }
+            webChromeClient = object : WebChromeClient() {
+                override fun onCreateWindow(
+                    view: WebView,
+                    isDialog: Boolean,
+                    isUserGesture: Boolean,
+                    resultMsg: Message
+                ): Boolean {
+                    // 弹窗内的二次 window.open 不再嵌套承接：嵌套会 closePopup() 销毁正处于
+                    // onCreateWindow 回调中的当前弹窗，存在崩溃风险；交回默认处理（弹窗内导航）
+                    onStatus("弹窗内弹出新窗口已忽略，可关闭弹窗后重试或手动粘贴 Token")
+                    return false
+                }
+            }
+        }
+        container.addView(
+            child,
+            FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            )
+        )
+        child.bringToFront()
+
+        // 关闭按钮：第三方 IdP 拒绝 embedded WebView 时避免用户困死在弹窗内
+        val density = resources.displayMetrics.density
+        val button = AndroidButton(context).apply {
+            text = "✕"
+            textSize = 16f
+            contentDescription = "关闭登录弹窗"
+            setBackgroundColor(0x99000000.toInt())
+            setTextColor(0xFFFFFFFF.toInt())
+            setOnClickListener { closePopup() }
+        }
+        container.addView(
+            button,
+            FrameLayout.LayoutParams(
+                (36 * density).toInt(),
+                (36 * density).toInt(),
+                Gravity.TOP or Gravity.END
+            ).apply {
+                topMargin = (8 * density).toInt()
+                marginEnd = (8 * density).toInt()
+            }
+        )
+        popupCloseButton = button
+        return child
+    }
+
+    /** 关闭并销毁 popup（幂等）；主 WebView 继续轮询 */
+    private fun closePopup() {
+        popupCloseButton?.let { container.removeView(it) }
+        popupCloseButton = null
+        popupWebView?.let { w ->
+            container.removeView(w)
+            w.stopLoading()
+            w.destroy()
+        }
+        popupWebView = null
+    }
+
     // MARK: - 工具（对齐 iOS/macOS 实现）
 
     private fun storageSignature(pairs: JSONObject): String {
@@ -287,5 +454,12 @@ class TokenLoginWebView(
             }
         }
         return result
+    }
+
+    companion object {
+        private const val LOGIN_URL = "https://platform.deepseek.com/"
+        // 移动端 Chrome UA：保持页面正常渲染；刻意不伪装桌面 UA 绕过第三方 IdP 对 embedded WebView 的限制（Issue #14 能力边界）
+        private const val USER_AGENT =
+            "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36"
     }
 }
