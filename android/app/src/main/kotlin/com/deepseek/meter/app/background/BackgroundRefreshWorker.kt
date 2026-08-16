@@ -1,6 +1,7 @@
 package com.deepseek.meter.app.background
 
 import android.content.Context
+import android.util.Log
 import androidx.work.Worker
 import androidx.work.WorkerParameters
 import com.deepseek.meter.app.KeystoreTokenStore
@@ -10,7 +11,6 @@ import com.deepseek.meter.core.LowBalancePolicy
 import com.deepseek.meter.core.PlatformException
 import com.deepseek.meter.core.PlatformService
 import com.deepseek.meter.core.RefreshDecision
-import android.util.Log
 
 /**
  * 后台余额刷新 Worker（Issue #15）：只调 get_user_summary 做低余额检查，
@@ -19,10 +19,17 @@ import android.util.Log
  * 安全边界：Token 严禁进入 WorkManager InputData（会落 WorkManager 数据库），
  * 由 Worker 自行从 Keystore 读取；错误映射复用 :core 的 BackgroundRefreshDecision。
  */
-class BackgroundRefreshWorker(
+class BackgroundRefreshWorker private constructor(
     appContext: Context,
-    params: WorkerParameters
+    params: WorkerParameters,
+    private val platformService: PlatformService
 ) : Worker(appContext, params) {
+
+    /**
+     * WorkManager 反射要求 (Context, WorkerParameters) 构造器（默认 WorkerFactory 用它实例化）；
+     * 生产用默认实现，测试可经主构造器注入 stub（与 AppModel 注入 PlatformHttp 的边界一致）。
+     */
+    constructor(appContext: Context, params: WorkerParameters) : this(appContext, params, PlatformService())
 
     override fun doWork(): Result {
         val prefs = applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -41,7 +48,7 @@ class BackgroundRefreshWorker(
 
         // 3. 拉取账户汇总 → 低余额策略 → 必要时本地通知
         return try {
-            val summary = PlatformService().fetchSummary(token)
+            val summary = platformService.fetchSummary(token)
             val wallet = summary.normalWallets.firstOrNull()
             if (wallet == null) {
                 Result.success()
@@ -72,12 +79,14 @@ class BackgroundRefreshWorker(
     }
 
     companion object {
-        private const val TAG = "DeepSeekMeter"
+        private const val TAG = "BackgroundRefreshWorker"
         /** 后台刷新相关 SharedPreferences 名（SettingsScreen / 本 Worker 共用） */
         const val PREFS_NAME = "deepseek_meter_background"
         /** 低余额通知开关（设置页写入；Worker 每次执行前检查） */
         const val KEY_ALERTS_ENABLED = "lowBalanceAlertsEnabled"
         /** 同一低余额周期是否已提醒（策略返回的状态持久化于此） */
         const val KEY_ALERTED = "lowBalanceAlerted"
+        /** 通知权限拒绝次数（跨进程重启保留，避免反复弹权限框） */
+        const val KEY_DENIAL_COUNT = "lowBalancePermissionDenials"
     }
 }
