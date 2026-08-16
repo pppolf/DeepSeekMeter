@@ -236,7 +236,10 @@ class TokenLoginWebView(
         // 看门狗：页面导航期间 evaluateJavascript 回调可能丢失，5 秒未归则复位 isChecking，
         // 下一个轮询周期（1.5s）会重试，而不是永久卡死
         postDelayed({ if (gen == checkGeneration) isChecking = false }, 5000)
-        val js = "(function() { try { var pairs = {}; for (var i = 0; i < localStorage.length; i++) { var k = localStorage.key(i); pairs[k] = localStorage.getItem(k); } return JSON.stringify({ ok: true, data: pairs }); } catch (e) { return JSON.stringify({ ok: false, error: String(e) }); } })()"
+        // 注意：Android evaluateJavascript 的回调收到的是「JSON 编码的求值结果」——
+        // 若脚本返回字符串（JSON.stringify），回调里是带引号的 JSON 字符串，JSONObject 解析必然失败；
+        // 必须让脚本直接返回对象，由 evaluateJavascript 序列化为 JSON 对象（iOS WKWebView 返回裸值，语义不同勿照搬；A4 真机发现）
+        val js = "(function() { try { var pairs = {}; for (var i = 0; i < localStorage.length; i++) { var k = localStorage.key(i); pairs[k] = localStorage.getItem(k); } return { ok: true, data: pairs }; } catch (e) { return { ok: false, error: String(e) }; } })()"
         evaluateJavascript(js) { result ->
             if (gen != checkGeneration) return@evaluateJavascript
             isChecking = false
