@@ -11,7 +11,7 @@ import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
-import android.widget.Button as WidgetButton
+import android.widget.Button as AndroidButton
 import android.widget.FrameLayout
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -155,7 +155,7 @@ class TokenLoginWebView(
     private var popupWebView: WebView? = null
 
     /** popup 的关闭按钮（第三方 IdP 拒绝 embedded WebView 时给用户的明确出口） */
-    private var popupCloseButton: WidgetButton? = null
+    private var popupCloseButton: AndroidButton? = null
 
     init {
         settings.javaScriptEnabled = true
@@ -211,8 +211,9 @@ class TokenLoginWebView(
     fun stopPolling() {
         pollTimer.cancel()
         closePopup()
-        // 登录流程结束（成功/释放）时销毁主 WebView，避免页面 JS 与回调残留
-        //（AI review 建议：容器与 WebView 的相互引用随视图树整体回收，销毁主 WebView 更彻底）
+        // 登录流程结束（成功/释放）：按 WebView.destroy() 的调用契约，先从容器移除再销毁，
+        // 避免页面 JS 与回调残留；容器与 WebView 的相互引用随视图树整体回收
+        (parent as? ViewGroup)?.removeView(this)
         destroy()
     }
 
@@ -343,8 +344,10 @@ class TokenLoginWebView(
                     isUserGesture: Boolean,
                     resultMsg: Message
                 ): Boolean {
-                    // 弹窗内的 window.open 同样承接（替换旧弹窗）
-                    return handleCreateWindow(resultMsg)
+                    // 弹窗内的二次 window.open 不再嵌套承接：嵌套会 closePopup() 销毁正处于
+                    // onCreateWindow 回调中的当前弹窗，存在崩溃风险；交回默认处理（弹窗内导航）
+                    onStatus("弹窗内弹出新窗口已忽略，可关闭弹窗后重试或手动粘贴 Token")
+                    return false
                 }
             }
         }
@@ -359,9 +362,10 @@ class TokenLoginWebView(
 
         // 关闭按钮：第三方 IdP 拒绝 embedded WebView 时避免用户困死在弹窗内
         val density = resources.displayMetrics.density
-        val button = WidgetButton(context).apply {
+        val button = AndroidButton(context).apply {
             text = "✕"
             textSize = 16f
+            contentDescription = "关闭登录弹窗"
             setBackgroundColor(0x99000000.toInt())
             setTextColor(0xFFFFFFFF.toInt())
             setOnClickListener { closePopup() }
