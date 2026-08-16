@@ -54,4 +54,8 @@ dependencies {
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.foundation:foundation")
+
+    // 后台刷新调度（D6 已决策，见 MOBILE-PLAN.md / Issue #11）：androidx 官方后台调度库，
+    // 仅用于 :app 层低余额后台刷新；:core 保持零 AndroidX 依赖
+    implementation("androidx.work:work-runtime:2.10.1")
 }
