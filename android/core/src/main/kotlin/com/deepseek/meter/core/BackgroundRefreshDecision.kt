@@ -11,6 +11,8 @@ enum class RefreshDecision { RETRY, COMPLETE }
  *  - NETWORK：临时网络异常 → RETRY（WorkManager 自带退避重试）；
  *  - 其他（EMPTY_TOKEN / Token 失效 40002·40003 / HTTP / API / DECODING）→ COMPLETE，
  *    避免失效 Token 或不可恢复错误导致 WorkManager 无限重试。
+ *  - 刻意设计：Token 失效（API 40002 / 40003）虽属 API 错误，同样返回 COMPLETE——
+ *    失效 Token 只有用户重新登录能解决，后台重试没有意义。
  */
 object BackgroundRefreshDecision {
     fun decide(error: PlatformException?): RefreshDecision {
