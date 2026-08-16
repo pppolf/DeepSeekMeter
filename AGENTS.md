@@ -31,6 +31,9 @@ python3 Scripts/check-ios-project.py   # 单独跑工程结构校验（无 Xcode
 
 # 本机有 Xcode 后：一键跑 iOS 模拟器（构建 + 运行 + 截图），详见 docs/install-xcode-and-run.md
 bash Scripts/run-ios-simulator.sh
+
+# Android 核心单测（需 JDK 17 + Android SDK；JVM 直跑无需设备）
+cd android && ./gradlew :core:test
 ```
 
 CI 的验证链：`swift build` → `swift build -c release` → `run-tests.sh` → `build-app.sh release` → 冒烟启动 6 秒。
@@ -65,6 +68,9 @@ ios/                             iOS 版（开发中，详见 MOBILE-PLAN.md）
   DeepSeekMeter/                 iOS App 源码（AppMain / TokenStore(Keychain) / Views/ / NotificationService / BackgroundRefreshService）
   DeepSeekMeterWidget/            WidgetKit 余额小组件（快照驱动；Token 不进 App Group 共享容器）
   DeepSeekMeterCore/Sources/DeepSeekMeterCoreSelftest/  核心轻量自测（swift run 直接跑，不依赖 XCTest）
+android/                         Android 版（开发中，详见 MOBILE-PLAN.md 第 4 节）
+  core/                          纯逻辑核心模块（Kotlin，零第三方业务依赖；org.json 手写映射）
+  core/src/test/                 本地 JVM 单测（无需设备；org.json 测试期用官方 jar 替身）
 Scripts/
   build-app.sh / install.sh / notarize.sh / run-tests.sh / run-ios-tests.sh / make-icon.sh / generate-icon.swift
   Info.plist                     应用包信息（**版本号在这里改**）
