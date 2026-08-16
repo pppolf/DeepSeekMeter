@@ -16,7 +16,7 @@ android {
         minSdk = 26
         targetSdk = 35
         versionCode = 1
-        versionName = "0.1.0"
+        versionName = "0.3.0"
     }
 
     compileOptions {
@@ -27,6 +27,9 @@ android {
     buildTypes {
         release {
             isMinifyEnabled = false
+            // GitHub Release 直装 APK 用 debug 签名（与 macOS 版 ad-hoc 签名理念一致）：
+            // 任何人均可构建/重签，签名仅保证可安装，不构成信任背书。
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
 
