@@ -165,6 +165,10 @@ class TokenLoginWebView(
     private var tokenReceived = false
     private var lastSignature = ""
     private var polling = true
+    // 看门狗代数：evaluateJavascript / 校验回调在页面导航期间可能丢失（真机发现），
+    // 用代数区分过期回调，配合 postDelayed 复位，防止轮询永久卡死
+    private var checkGeneration = 0
+    private var validateGeneration = 0
 
     init {
         settings.javaScriptEnabled = true
@@ -227,9 +231,14 @@ class TokenLoginWebView(
             onStatus("请在官方登录页登录…")
             return
         }
+        val gen = ++checkGeneration
         isChecking = true
+        // 看门狗：页面导航期间 evaluateJavascript 回调可能丢失，5 秒未归则复位 isChecking，
+        // 下一个轮询周期（1.5s）会重试，而不是永久卡死
+        postDelayed({ if (gen == checkGeneration) isChecking = false }, 5000)
         val js = "(function() { try { var pairs = {}; for (var i = 0; i < localStorage.length; i++) { var k = localStorage.key(i); pairs[k] = localStorage.getItem(k); } return JSON.stringify({ ok: true, data: pairs }); } catch (e) { return JSON.stringify({ ok: false, error: String(e) }); } })()"
         evaluateJavascript(js) { result ->
+            if (gen != checkGeneration) return@evaluateJavascript
             isChecking = false
             if (tokenReceived || isValidating) return@evaluateJavascript
             if (result == null || result == "null") {
@@ -265,8 +274,12 @@ class TokenLoginWebView(
     /// 逐候选交给 AppModel 原生侧校验（内部 fetchCurrentUser）
     private fun validate(candidates: List<String>, index: Int) {
         if (tokenReceived || index >= candidates.size) return
+        val gen = ++validateGeneration
         isValidating = true
+        // 看门狗：校验链路（单线程执行器 + 网络请求）极端情况下最长约 90 秒，兜底复位防卡死
+        postDelayed({ if (gen == validateGeneration) isValidating = false }, 90000)
         onToken(candidates[index]) { ok ->
+            if (gen != validateGeneration) return@onToken
             isValidating = false
             if (ok) {
                 tokenReceived = true

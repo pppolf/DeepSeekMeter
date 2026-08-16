@@ -408,6 +408,14 @@ private fun timeText(ms: Long): String =
     SimpleDateFormat("HH:mm", Locale.US).format(Date(ms))
 
 private fun dayLabel(dateKey: String): String {
+    // dailyEntries 的 key 是「日」数字（如 "16"，供图表坐标标签），这里按当月渲染；
+    // 兼容完整日期 key（"2026-08-16"）——A4 真机曾因用 yyyy-MM-dd 解析 "16" 崩溃（ParseException）
+    val dayOnly = dateKey.toIntOrNull()
+    if (dayOnly != null) {
+        val cal = Calendar.getInstance()
+        cal.set(Calendar.DAY_OF_MONTH, dayOnly)
+        return (cal.get(Calendar.MONTH) + 1).toString() + "月" + dayOnly.toString() + "日"
+    }
     val f = dayFormatter
     val date = f.parse(dateKey) ?: return dateKey
     val cal = Calendar.getInstance().apply { time = date }
