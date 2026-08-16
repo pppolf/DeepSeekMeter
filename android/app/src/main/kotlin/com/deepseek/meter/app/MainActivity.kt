@@ -24,7 +24,7 @@ class MainActivity : ComponentActivity() {
 }
 
 /**
- * Controller 装配 + 生命周期桥接（Issue #12）：
+ * Controller 装配 + 生命周期桥接（[Issue #12](https://github.com/pppolf/DeepSeekMeter/issues/12)）：
  *  - ON_START：startForegroundPolling()（立即刷新 + 启动定时轮询）
  *  - ON_STOP：pauseForegroundPolling()（后台停掉高频轮询，保留线程池）
  *  - composition dispose：close()（幂等，彻底释放）
