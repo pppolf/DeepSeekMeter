@@ -35,6 +35,8 @@ android {
 
     buildFeatures {
         compose = true
+        // QA 测试通知入口依赖 BuildConfig.DEBUG 门控（仅 debug 构建显示，release 自动剔除）
+        buildConfig = true
     }
 }
 

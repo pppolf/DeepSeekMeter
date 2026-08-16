@@ -134,3 +134,9 @@ jobs:
         run: |
           chmod +x android/gradlew
           cd android && ./gradlew :core:test :app:assembleDebug --no-daemon
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-debug-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
