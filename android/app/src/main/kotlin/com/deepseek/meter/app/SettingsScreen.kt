@@ -1,5 +1,10 @@
 package com.deepseek.meter.app
 
+import android.Manifest
+import android.content.Context
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -15,21 +20,80 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.deepseek.meter.app.background.BackgroundRefreshScheduler
+import com.deepseek.meter.app.background.BackgroundRefreshWorker
+import com.deepseek.meter.app.notification.LowBalanceNotifier
 import com.deepseek.meter.core.AppModel
 import com.deepseek.meter.core.DataStatus
 
 /**
- * 设置：账号（登录/退出）、刷新间隔、隐私说明（对齐 iOS SettingsView）。
+ * 设置：账号（登录/退出）、刷新间隔、低余额通知、隐私说明（对齐 iOS SettingsView）。
+ * 通知开关与后台 Worker 生命周期闭环（Issue #15）：
+ *  OFF→ON：权限通过后保存 enabled=true 并注册唯一周期任务（UPDATE）；
+ *  ON→OFF：保存 enabled=false、取消唯一任务、重置 alerted 状态；
+ *  Worker 每次执行前还会二次检查开关（双重保障）。
  */
 @Composable
 fun SettingsScreen(state: AppModel.State, controller: AppController, onLogin: () -> Unit) {
+    val context = LocalContext.current
+
+    // ---- 低余额通知状态（Issue #15） ----
+    val notifier = remember { LowBalanceNotifier(context) }
+    val bgPrefs = remember {
+        context.getSharedPreferences("deepseek_meter_background", Context.MODE_PRIVATE)
+    }
+    var alertsEnabled by remember { mutableStateOf(bgPrefs.getBoolean(BackgroundRefreshWorker.KEY_ALERTS_ENABLED, false)) }
+    var showPermissionNote by remember { mutableStateOf(false) }
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted && notifier.areNotificationsEnabled()) {
+            bgPrefs.edit().putBoolean(BackgroundRefreshWorker.KEY_ALERTS_ENABLED, true).apply()
+            alertsEnabled = true
+            showPermissionNote = false
+            BackgroundRefreshScheduler.schedule(context)
+        } else {
+            // 拒绝（或渠道在系统设置中被关闭）：保持关闭，展示系统设置入口，不自动骚扰式弹窗
+            showPermissionNote = true
+        }
+    }
+
+    fun enableAlerts() {
+        notifier.createChannel()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !notifier.areNotificationsEnabled()) {
+            // Android 13+ 未授予：请求权限（系统决定是否展示对话框）
+            permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        } else {
+            // 已授权（或 <13 无运行时权限）：启用并注册唯一周期任务
+            bgPrefs.edit().putBoolean(BackgroundRefreshWorker.KEY_ALERTS_ENABLED, true).apply()
+            alertsEnabled = true
+            showPermissionNote = false
+            BackgroundRefreshScheduler.schedule(context)
+        }
+    }
+
+    fun disableAlerts() {
+        bgPrefs.edit().putBoolean(BackgroundRefreshWorker.KEY_ALERTS_ENABLED, false).apply()
+        bgPrefs.edit().remove(BackgroundRefreshWorker.KEY_ALERTED).apply() // 重置提醒状态
+        alertsEnabled = false
+        showPermissionNote = false
+        BackgroundRefreshScheduler.cancel(context)
+    }
+
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
         Text("设置", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(12.dp))
@@ -84,6 +148,37 @@ fun SettingsScreen(state: AppModel.State, controller: AppController, onLogin: ()
                                 }
                             }
                         }
+                    }
+                }
+            }
+        }
+
+        Spacer(Modifier.height(12.dp))
+        Card(shape = RoundedCornerShape(20.dp)) {
+            Column(Modifier.fillMaxWidth().padding(16.dp)) {
+                Text("通知", style = MaterialTheme.typography.titleMedium)
+                Spacer(Modifier.height(8.dp))
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        "低余额提醒：余额低于 1.0（当前币种单位）时本地通知，纯本地无推送",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.outline,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Switch(
+                        checked = alertsEnabled,
+                        onCheckedChange = { on -> if (on) enableAlerts() else disableAlerts() }
+                    )
+                }
+                if (showPermissionNote) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "通知权限未开启：请在系统设置中允许 DeepSeekMeter 通知后重试",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                    TextButton(onClick = { notifier.openNotificationSettings() }) {
+                        Text("打开系统通知设置")
                     }
                 }
             }
