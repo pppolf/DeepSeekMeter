@@ -12,7 +12,7 @@ import java.util.concurrent.TimeUnit
  * 后台余额刷新调度器（Issue #15）：
  * 唯一周期任务 + ExistingPeriodicWorkPolicy.UPDATE——任何情况下不会因多次进入设置页
  * 注册多个后台 Worker（UPDATE 不取消运行中的 worker、保持原排队时间）；
- * 网络约束 CONNECTED；周期 15 分钟（WorkManager 下限），Best Effort、不保证精确时间。
+ * 网络约束 CONNECTED；周期 15 分钟（WorkManager 下限），尽力而为、不保证精确时间。
  */
 object BackgroundRefreshScheduler {
 
