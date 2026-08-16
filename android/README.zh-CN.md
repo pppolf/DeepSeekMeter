@@ -54,3 +54,29 @@ cd android
 | AppModel.swift | AppModel.kt（同步核心；轮询在 App 层） |
 | SettingsStore（UserDefaults） | Keystore + SharedPreferences（规划） |
 | WKWebView 登录 | WebView + JS 提取（规划） |
+
+## App 层（A3，Compose）
+
+```
+app/
+  src/main/AndroidManifest.xml          INTERNET 权限 + MainActivity
+  src/main/res/                         主题（平台 Material，零 appcompat）+ 鲸鱼娘图标（各密度 mipmap）
+  src/main/kotlin/com/deepseek/meter/app/
+    MainActivity.kt                     入口 + AppController 装配
+    DeepSeekMeterApp.kt                 两 Tab（主页 + 设置）+ 登录全屏页
+    HomeScreen.kt                       余额渐变卡 / 本月用量 / Canvas 趋势图（对齐 iOS HomeView）
+    SettingsScreen.kt                   账号 / 刷新间隔 / 隐私
+    LoginScreen.kt                      WebView 登录 + localStorage 轮询提取 Token + 手动粘贴兜底
+    KeystoreTokenStore.kt               Keystore AES/GCM 加密 Token（对齐 iOS Keychain 语义）
+    AppController.kt                    状态桥接 + 前台定时刷新（核心保持同步纯逻辑）
+```
+
+构建：
+
+```bash
+cd android
+./gradlew :app:assembleDebug      # 产出 app/build/outputs/apk/debug/app-debug.apk
+./gradlew :core:test              # 核心单测
+```
+
+进度：A1 骨架 ✅ / A2 核心 ✅ / **A3 Compose App 层 ✅（本地构建 APK 通过，待真机验收）** / A4 打磨（后台刷新、通知、深色模式）待启动。

@@ -21,3 +21,4 @@ dependencyResolutionManagement {
 }
 rootProject.name = "DeepSeekMeterAndroid"
 include(":core")
+include(":app")
