@@ -21,10 +21,9 @@
 
 <!-- 提交前请逐项勾选（对应仓库 AGENTS.md 的完成标准） -->
 
-- [ ] `swift build` 通过
-- [ ] `swift build -c release` 通过
-- [ ] `bash Scripts/run-tests.sh` 全部通过
-- [ ] `bash Scripts/build-app.sh release` 打包成功
+- [ ] macOS：`swift build` / `swift build -c release` / `bash Scripts/run-tests.sh` / `bash Scripts/build-app.sh release` 通过（涉及 macOS 时）
+- [ ] Android：`cd android && ./gradlew :core:test :app:assembleDebug` 通过（涉及 Android 时）
+- [ ] iOS：`bash Scripts/run-ios-tests.sh` + 模拟器构建通过（涉及 iOS 时）
 - [ ] 手动运行验证过相关场景（UI 改动请附截图）
 
 ## 边界检查
@@ -35,7 +34,7 @@
 - [ ] 未改动平台接口契约（URL / 参数 / 响应结构），或已抓真实响应验证并更新自测样例
 - [ ] 未在代码 / 日志 / 截图 / 提交中夹带真实 Token 或凭据
 - [ ] 未提交构建产物（`.build/`、`build/`、`.DS_Store`）
-- [ ] 未改变 Token 存储方式（保持 UserDefaults）
+- [ ] 未改变 Token 存储方式（macOS 为 UserDefaults；iOS 为 Keychain；Android 为 Keystore 加密后存 SharedPreferences）
 - [ ] 注释与 UI 文案保持中文；文档遵循双语惯例
 - [ ] 提交信息符合 Conventional Commits + 中文描述
 
