@@ -3,7 +3,7 @@
 > 本文档是 iOS / Android 移动端的**规划与实施方案**，供维护者评审后按里程碑执行。
 > 目标：与 macOS / Windows 版功能对齐，延续「平行实现 + 零第三方业务依赖 + 隐私承诺」的项目基因。
 
-**进度**：M1 骨架 ✅｜ M2 核心包 + 自测 ✅（82 项断言全绿）｜ M3 App 主体代码 ✅｜ M4 打磨代码 ✅｜ M5 ✅（通知 + WidgetKit 小组件）｜ **本地模拟器验证 ✅（Xcode 26.6 + iOS 26.5）与真机安装运行 ✅（免费签名）**｜ **Android A1 骨架 ✅ + A2 核心 ✅ + A3 Compose App 层 ✅（两 Tab 界面 + WebView 登录 + Keystore Token + Canvas 趋势图，本地构建 APK 通过，2026-08-16）**｜ A4 打磨（后台刷新/通知/深色模式）待启动｜ TestFlight/上架待决策点 D1。
+**进度**：M1 骨架 ✅｜ M2 核心包 + 自测 ✅（82 项断言全绿）｜ M3 App 主体代码 ✅｜ M4 打磨代码 ✅｜ M5 ✅（通知 + WidgetKit 小组件）｜ **本地模拟器验证 ✅（Xcode 26.6 + iOS 26.5）与真机安装运行 ✅（免费签名）**｜ **Android A1 骨架 ✅ + A2 核心 ✅ + A3 Compose App 层 ✅（两 Tab 界面 + WebView 登录 + Keystore Token + Canvas 趋势图，本地构建 APK 通过，2026-08-16）**｜ **Android A4 ✅（前台轮询生命周期、WorkManager 后台刷新（D6 已决策）、低余额通知 + 权限三态 + 去重、WebView popup 承接、PR CI 构建 App、真机 QA 矩阵 22 项通过，2026-08-17）**｜ A5（Widget/商店分发）规划中｜ TestFlight/上架待决策点 D1。
 
 ---
 
