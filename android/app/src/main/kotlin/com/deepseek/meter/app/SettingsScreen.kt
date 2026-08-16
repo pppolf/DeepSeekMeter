@@ -195,6 +195,19 @@ fun SettingsScreen(state: AppModel.State, controller: AppController, onLogin: ()
                         Text("打开系统通知设置")
                     }
                 }
+                // QA 入口（仅 debug 构建）：低余额通知管线真机验证用——
+                // 渠道/权限/图标/文案/点击跳转与真实余额无关，无需真实低余额账户（#16 QA 矩阵）
+                if (BuildConfig.DEBUG) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "QA：发送一条测试低余额通知（仅 debug 构建显示）",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.outline
+                    )
+                    TextButton(onClick = { notifier.notifyLowBalance(0.5, "CNY") }) {
+                        Text("发送测试通知")
+                    }
+                }
             }
         }
 
