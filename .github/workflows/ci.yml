@@ -130,7 +130,7 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Core tests + App debug build（JVM 单测 + Compose App 编译）
+      - name: Core tests + App debug build (JVM unit tests + Compose compile)
         run: |
           chmod +x android/gradlew
           cd android && ./gradlew :core:test :app:assembleDebug --no-daemon
