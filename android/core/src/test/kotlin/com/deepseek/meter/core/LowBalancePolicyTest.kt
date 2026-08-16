@@ -1,6 +1,5 @@
 package com.deepseek.meter.core
 
-import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -75,8 +74,10 @@ class LowBalancePolicyTest {
     @Test
     fun customThreshold() {
         assertTrue(evaluate(0.9, alerted = false, threshold = 2.0).shouldNotify)
-        assertFalse(evaluate(2.0, alerted = false, threshold = 2.0).shouldNotify)
-        assertFalse(evaluate(2.5, alerted = false, threshold = 2.0).shouldNotify)
+        val atThreshold = evaluate(2.0, alerted = true, threshold = 2.0)
+        assertFalse(atThreshold.shouldNotify)
+        assertFalse(atThreshold.alerted)
+        assertFalse(evaluate(2.5, alerted = true, threshold = 2.0).shouldNotify)
     }
 
     // 决策结果可作为下次输入往返（调用方持久化契约）
@@ -86,6 +87,6 @@ class LowBalancePolicyTest {
         val second = evaluate(0.3, alerted = first.alerted)
         assertTrue(first.shouldNotify)
         assertFalse(second.shouldNotify)
-        assertEquals(true, second.alerted)
+        assertTrue(second.alerted)
     }
 }
