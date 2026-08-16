@@ -8,6 +8,7 @@ import androidx.compose.runtime.mutableStateOf
 import com.deepseek.meter.core.AppModel
 import com.deepseek.meter.core.PlatformService
 import java.util.concurrent.Executors
+import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.ScheduledFuture
 import java.util.concurrent.TimeUnit
@@ -51,7 +52,8 @@ class AppController(context: Context) {
 
     private var scheduledFuture: ScheduledFuture<*>? = null
 
-    /** 是否处于前台轮询中（决定间隔修改是否重建定时任务） */
+    /** 是否处于前台轮询中（决定间隔修改是否重建定时任务）；主线程写、间隔 setter 可能跨线程读，@Volatile 保证可见性 */
+    @Volatile
     private var polling = false
 
     /** 关闭标记：close() 后拒绝一切新任务，防止 dispose 后残留回调提交任务 */
@@ -140,8 +142,9 @@ class AppController(context: Context) {
         if (closed) return
         try {
             executor.execute(task)
-        } catch (_: Throwable) {
-            // close() 与提交竞态：任务被拒绝直接忽略，避免 Crash
+        } catch (_: RejectedExecutionException) {
+            // close() 与提交竞态：任务被拒绝直接忽略，避免 Crash；
+            // 仅捕获拒绝异常（任务体自身的异常由各任务内 try/catch 兜底），不吞其他运行时异常
         }
     }
 
