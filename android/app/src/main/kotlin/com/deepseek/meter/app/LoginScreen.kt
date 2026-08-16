@@ -211,6 +211,9 @@ class TokenLoginWebView(
     fun stopPolling() {
         pollTimer.cancel()
         closePopup()
+        // 登录流程结束（成功/释放）时销毁主 WebView，避免页面 JS 与回调残留
+        //（AI review 建议：容器与 WebView 的相互引用随视图树整体回收，销毁主 WebView 更彻底）
+        destroy()
     }
 
     private fun checkToken() {
@@ -281,14 +284,19 @@ class TokenLoginWebView(
      * 不做任何 UA 伪装或脚本绕过，用户可点右上角 ✕ 关闭弹窗，改用手动粘贴 Token。
      */
     private fun handleCreateWindow(resultMsg: Message): Boolean {
-        val popup = createPopupWebView()
-        popupWebView = popup
-        val transport = WebView.WebViewTransport()
-        transport.webView = popup
-        resultMsg.obj = transport
-        resultMsg.sendToTarget()
-        onStatus("检测到登录弹窗，请在弹窗内完成登录；无法完成时可点右上角 ✕ 关闭")
-        return true
+        return try {
+            val popup = createPopupWebView()
+            popupWebView = popup
+            val transport = WebView.WebViewTransport()
+            transport.webView = popup
+            resultMsg.obj = transport
+            resultMsg.sendToTarget()
+            onStatus("检测到登录弹窗，请在弹窗内完成登录；无法完成时可点 ✕ 关闭")
+            true
+        } catch (_: Exception) {
+            // 承接失败（极端情况）：交回 WebView 默认处理（主窗口内导航），绝不让弹窗流程卡死
+            false
+        }
     }
 
     /** 创建 popup 子 WebView（替换已存在的旧弹窗）；与主 WebView 共享 localStorage / cookie */
@@ -445,6 +453,7 @@ class TokenLoginWebView(
 
     companion object {
         private const val LOGIN_URL = "https://platform.deepseek.com/"
+        // 移动端 Chrome UA：保持页面正常渲染；刻意不伪装桌面 UA 绕过第三方 IdP 对 embedded WebView 的限制（Issue #14 能力边界）
         private const val USER_AGENT =
             "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36"
     }
