@@ -38,6 +38,8 @@ import com.deepseek.meter.app.background.BackgroundRefreshWorker
 import com.deepseek.meter.app.notification.LowBalanceNotifier
 import com.deepseek.meter.core.AppModel
 import com.deepseek.meter.core.DataStatus
+import com.deepseek.meter.core.LowBalancePolicy
+import com.deepseek.meter.core.format
 
 /**
  * 设置：账号（登录/退出）、刷新间隔、低余额通知、隐私说明（对齐 iOS SettingsView）。
@@ -58,7 +60,7 @@ fun SettingsScreen(state: AppModel.State, controller: AppController, onLogin: ()
     var alertsEnabled by remember { mutableStateOf(bgPrefs.getBoolean(BackgroundRefreshWorker.KEY_ALERTS_ENABLED, false)) }
     var showPermissionNote by remember { mutableStateOf(false) }
     // 拒绝计数（权限三态）：0=未请求；1=曾拒绝，可再次点击重试；≥2=引导系统设置，不再弹框
-    var permissionDenialCount by remember { mutableStateOf(0) }
+    var permissionDenialCount by remember { mutableStateOf(bgPrefs.getInt(BackgroundRefreshWorker.KEY_DENIAL_COUNT, 0)) }
 
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -68,10 +70,12 @@ fun SettingsScreen(state: AppModel.State, controller: AppController, onLogin: ()
             alertsEnabled = true
             showPermissionNote = false
             permissionDenialCount = 0
+            bgPrefs.edit().putInt(BackgroundRefreshWorker.KEY_DENIAL_COUNT, 0).apply()
             BackgroundRefreshScheduler.schedule(context)
         } else {
-            // 拒绝（或渠道在系统设置中被关闭）：保持关闭，记录拒绝次数，展示系统设置入口
+            // 拒绝（或渠道在系统设置中被关闭）：保持关闭，记录拒绝次数（持久化，重启后不重置），展示系统设置入口
             permissionDenialCount += 1
+            bgPrefs.edit().putInt(BackgroundRefreshWorker.KEY_DENIAL_COUNT, permissionDenialCount).apply()
             showPermissionNote = true
         }
     }
@@ -171,7 +175,7 @@ fun SettingsScreen(state: AppModel.State, controller: AppController, onLogin: ()
                 Spacer(Modifier.height(8.dp))
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                     Text(
-                        "低余额提醒：余额低于 1.0（当前币种单位）时本地通知，纯本地无推送",
+                        "低余额提醒：余额低于 " + format(LowBalancePolicy.DEFAULT_THRESHOLD) + "（当前币种单位）时本地通知，纯本地无推送",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.outline,
                         modifier = Modifier.weight(1f)

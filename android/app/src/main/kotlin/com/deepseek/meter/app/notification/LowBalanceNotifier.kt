@@ -53,7 +53,7 @@ class LowBalanceNotifier(private val context: Context) {
         val balanceText = symbol + format(balance)
         val thresholdText = symbol + format(LowBalancePolicy.DEFAULT_THRESHOLD)
         val notification = Notification.Builder(context, CHANNEL_ID)
-            .setSmallIcon(R.mipmap.ic_launcher)
+            .setSmallIcon(R.drawable.ic_stat_balance)
             .setContentTitle("余额不足提醒")
             .setContentText("当前余额 $balanceText，低于 $thresholdText")
             .setAutoCancel(true)
