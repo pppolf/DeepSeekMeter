@@ -1,0 +1,10 @@
+# Android 构建产物
+.gradle/
+build/
+*/build/
+local.properties
+.idea/
+*.iml
+captures/
+.externalNativeBuild/
+.cxx/
