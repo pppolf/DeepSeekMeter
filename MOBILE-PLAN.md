@@ -186,7 +186,7 @@ ios-build:
 | JSON | org.json（Android 内置） | 零依赖 |
 | Token 存储 | Android Keystore（AES/GCM）加密后密文存 SharedPreferences | 对齐「系统级安全存储」思路（macOS UserDefaults 例外 / Win DPAPI / iOS Keychain），零第三方 |
 | 登录 | WebView + JS 提取 localStorage userToken（同 macOS/iOS 机制）+ 手动粘贴兜底 | 三端一致 |
-| 刷新 | 前台定时刷新 + 后台 WorkManager（androidx.work，D6 已决策，见 Issue #11） | iOS 用 BGTask 的对应物；后台为 ≥15 分钟 Best Effort 周期检查（NetworkType.CONNECTED） |
+| 刷新 | 前台定时刷新 + 后台 WorkManager（androidx.work，D6 已决策，见 [Issue #11](https://github.com/pppolf/DeepSeekMeter/issues/11)） | iOS 用 BGTask 的对应物 |
 | 图表 | Compose Canvas 自绘柱状图 | 官方 Charts 库无稳定版，自绘零依赖 |
 | 小组件（可选） | AppWidgetProvider 原生（零依赖） | 桌面余额小组件 |
 
@@ -253,7 +253,7 @@ android/
 | D3 | iOS 分发渠道 | 先 TestFlight（决策点 D1 通过后）；App Store 审核风险如实说明（见 3.7） |
 | D4 | macOS 是否复用共享核心包 | **暂不**（独立可选重构，避免动 macOS 构建链）；先靠自测锁一致性 |
 | D5 | Android 测试框架 | 用 JUnit（平台工具视角）或纯 main 断言，二选一，倾向 JUnit |
-| D6 | Android 后台刷新 | **已决策：WorkManager**（androidx.work ≥ 2.8.0；Unique Periodic Work + ExistingPeriodicWorkPolicy.UPDATE；NetworkType.CONNECTED；周期 ≥ 15 分钟，Best Effort）。翻转理由见 Issue #11：后台刷新是 Best-Effort 周期余额检查而非精确定时任务，与 WorkManager 语义匹配；原生网络约束/Doze 友好/重启恢复；唯一任务名防重复注册；AlarmManager 需自行处理 Doze、API 31+ 精确闹钟权限与重启恢复，成本更高 |
+| D6 | Android 后台刷新 | **已决策：WorkManager**（androidx.work ≥ 2.8.0；Unique Periodic Work + ExistingPeriodicWorkPolicy.UPDATE；NetworkType.CONNECTED；周期 ≥ 15 分钟，Best Effort）。翻转理由见 [Issue #11](https://github.com/pppolf/DeepSeekMeter/issues/11)：后台刷新是 Best-Effort 周期余额检查而非精确定时任务，与 WorkManager 语义匹配；原生网络约束/Doze 友好/重启恢复；唯一任务名防重复注册；AlarmManager 需自行处理 Doze、API 31+ 精确闹钟权限与重启恢复，成本更高 |
 | D7 | Android 分发 | 先 APK 直装；Play Store / 国内商店视需求 |
 
 ---
