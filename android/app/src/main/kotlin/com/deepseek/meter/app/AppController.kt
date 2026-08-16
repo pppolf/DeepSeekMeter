@@ -54,7 +54,15 @@ class AppController(context: Context) {
     private fun restartPolling() {
         scheduledFuture?.cancel(false)
         scheduledFuture = executor.scheduleWithFixedDelay(
-            { appModel.refresh() },
+            {
+                // 兜底捕获：AppModel 内部已捕获 PlatformException，
+                // 这里防意外运行时异常终止定时线程（ScheduledExecutorService 特性）
+                try {
+                    appModel.refresh()
+                } catch (_: Throwable) {
+                    // 忽略单次失败，下个周期继续
+                }
+            },
             0,
             refreshIntervalSeconds,
             TimeUnit.SECONDS
@@ -63,20 +71,36 @@ class AppController(context: Context) {
 
     /** 手动刷新（下拉/按钮） */
     fun refresh() {
-        executor.execute { appModel.refresh() }
+        executor.execute {
+            try {
+                appModel.refresh()
+            } catch (_: Throwable) {
+                // 兜底：状态机内部已捕获平台异常
+            }
+        }
     }
 
     /** 保存并校验 Token（登录页调用）；结果回调在主线程 */
     fun saveToken(token: String, onResult: (Boolean) -> Unit) {
         executor.execute {
-            val ok = appModel.savePlatformToken(token)
+            val ok = try {
+                appModel.savePlatformToken(token)
+            } catch (_: Throwable) {
+                false
+            }
             mainHandler.post { onResult(ok) }
         }
     }
 
     /** 退出登录 */
     fun clearToken() {
-        executor.execute { appModel.clearPlatformToken() }
+        executor.execute {
+            try {
+                appModel.clearPlatformToken()
+            } catch (_: Throwable) {
+                // 兜底
+            }
+        }
     }
 
     companion object {

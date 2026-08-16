@@ -22,9 +22,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -45,6 +49,21 @@ fun LoginScreen(
     var status by remember { mutableStateOf("正在打开官方登录页…") }
     var showManual by remember { mutableStateOf(false) }
     var manualToken by remember { mutableStateOf("") }
+    var webViewRef by remember { mutableStateOf<TokenLoginWebView?>(null) }
+
+    // 生命周期桥接：页面不可见时暂停 WebView 轮询，回到前台恢复
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_RESUME -> webViewRef?.resumePolling()
+                Lifecycle.Event.ON_PAUSE -> webViewRef?.pausePolling()
+                else -> {}
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     Column(Modifier.fillMaxSize()) {
         Row(
@@ -61,7 +80,7 @@ fun LoginScreen(
                     ctx,
                     onToken = onSaveToken,
                     onStatus = { s -> status = s }
-                )
+                ).also { webViewRef = it }
             },
             modifier = Modifier.weight(1f),
             onRelease = { it.stopPolling() }
@@ -127,13 +146,25 @@ class TokenLoginWebView(
     private var isValidating = false
     private var tokenReceived = false
     private var lastSignature = ""
+    private var polling = true
 
     private fun startPolling() {
         pollTimer.schedule(object : TimerTask() {
             override fun run() {
-                post { checkToken() }
+                // 页面不可见时暂停轮询（onPause/onResume 由 LoginScreen 桥接）
+                if (polling) post { checkToken() }
             }
         }, 1500, 1500)
+    }
+
+    /** 页面进入后台：暂停轮询，节省资源 */
+    fun pausePolling() {
+        polling = false
+    }
+
+    /** 页面回到前台：恢复轮询 */
+    fun resumePolling() {
+        polling = true
     }
 
     fun stopPolling() {
@@ -216,6 +247,9 @@ class TokenLoginWebView(
         return sb.toString()
     }
 
+    // 候选提取策略与 iOS/macOS 完全一致（三端一致性优先，且该逻辑已在真实登录中验证）：
+    // 候选值只用于向 platform.deepseek.com 官方接口校验（fetchCurrentUser），绝不写入日志、
+    // 不发给任何第三方；只有校验通过的候选才会作为 Token 保存（Keystore 加密）。
     private fun tokenCandidates(pairs: JSONObject): List<String> {
         fun unwrap(raw: String): String {
             return try {

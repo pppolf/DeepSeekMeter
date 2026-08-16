@@ -306,7 +306,7 @@ private fun TrendSection(state: AppModel.State, metric: TrendMetric, onMetricCha
                     TokenDailyChart(entries, Modifier.fillMaxWidth().height(150.dp))
                     Spacer(Modifier.height(6.dp))
                     Row {
-                        val todayKey = dayFormatter().format(Date())
+                        val todayKey = dayFormatter.format(Date())
                         val todayVal = usage.amountDays.firstOrNull { it.date == todayKey }
                             ?.let { dailyValue(it, metric) } ?: 0.0
                         Text("今日 " + tokenString(todayVal), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
@@ -400,14 +400,15 @@ private fun countString(n: Int): String = java.text.NumberFormat.getNumberInstan
 
 private fun modelDisplayName(model: String): String = model.replace("deepseek-", "")
 
-private fun dayFormatter(): SimpleDateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+// 平台计日格式（主线程单实例复用；SimpleDateFormat 非线程安全，调用方均为主线程/单线程执行器）
+private val dayFormatter: SimpleDateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
     .apply { timeZone = TimeZone.getTimeZone("Asia/Shanghai") }
 
 private fun timeText(ms: Long): String =
     SimpleDateFormat("HH:mm", Locale.US).format(Date(ms))
 
 private fun dayLabel(dateKey: String): String {
-    val f = dayFormatter()
+    val f = dayFormatter
     val date = f.parse(dateKey) ?: return dateKey
     val cal = Calendar.getInstance().apply { time = date }
     return (cal.get(Calendar.MONTH) + 1).toString() + "月" + cal.get(Calendar.DAY_OF_MONTH).toString() + "日"
@@ -425,8 +426,8 @@ private fun dailyValue(day: UsageDay, metric: TrendMetric): Double {
 }
 
 private fun dailyEntries(usage: MonthUsage, metric: TrendMetric): List<Pair<String, Double>> {
-    val todayKey = dayFormatter().format(Date())
-    val f = dayFormatter()
+    val todayKey = dayFormatter.format(Date())
+    val f = dayFormatter
     return usage.amountDays
         .filter { it.date <= todayKey }
         .mapNotNull { day ->

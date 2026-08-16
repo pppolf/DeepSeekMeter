@@ -21,7 +21,15 @@ class KeystoreTokenStore(context: Context) : TokenStore {
     private val keyStore = KeyStore.getInstance(ANDROID_KEY_STORE).apply { load(null) }
 
     private fun getOrCreateKey(): SecretKey {
-        (keyStore.getEntry(ALIAS, null) as? KeyStore.SecretKeyEntry)?.let { return it.secretKey }
+        try {
+            (keyStore.getEntry(ALIAS, null) as? KeyStore.SecretKeyEntry)?.let { return it.secretKey }
+        } catch (_: Exception) {
+            // 密钥损坏/不可用：删除后重新生成（解密失败统一按「需要重新登录」处理）
+            try {
+                keyStore.deleteEntry(ALIAS)
+            } catch (_: Exception) {
+            }
+        }
         val generator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, ANDROID_KEY_STORE)
         generator.init(
             KeyGenParameterSpec.Builder(ALIAS, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
