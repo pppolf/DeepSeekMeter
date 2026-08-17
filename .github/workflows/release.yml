@@ -1,6 +1,6 @@
 name: Release
 
-# 推送 v* 标签（如 v0.1.0）时自动构建并发布 GitHub Release（macOS DMG + Windows ZIP）
+# 推送 v* 标签（如 v0.1.0）时自动构建并发布 GitHub Release（macOS DMG + Windows ZIP + Android APK）
 on:
   push:
     tags: ["v*"]
@@ -89,7 +89,7 @@ jobs:
       - name: Build release APK
         run: |
           chmod +x android/gradlew
-          cd android && ./gradlew :app:assembleRelease --no-daemon
+          cd android && ./gradlew :core:test :app:assembleRelease --no-daemon
 
       - name: Upload Android artifact
         uses: actions/upload-artifact@v4

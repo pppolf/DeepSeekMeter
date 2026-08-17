@@ -1,80 +1,103 @@
 # DeepSeekMeter · iOS 🐳
 
-The **iOS version** of DeepSeekMeter (in development): view your DeepSeek account balance, spending and token usage on your iPhone — feature-aligned with the [macOS](../README.md) and [Windows](../windows/README.md) versions, using the same platform API contract.
+The iOS implementation of DeepSeekMeter lets you view your DeepSeek balance, spending and token usage on an iPhone. It shares the same platform API contract as the [macOS app](../README.md), [Windows app](../windows/README.md) and [Android app](../android/README.md).
 
-> 总体规划（里程碑、决策点、红线适配）见 [MOBILE-PLAN.md](../MOBILE-PLAN.md)。当前进度：M1 骨架 ✅ / M2 核心包 + 自测 ✅（82 项断言全绿）/ M3 App 主体 ✅ / M4 打磨 ✅ / M5 ✅（通知 + WidgetKit 小组件）。**本地模拟器验证通过**（Xcode 26.6 + iOS 26.5：构建 + 运行 + 截图，见 [screenshots/simulator-first-run.png](screenshots/simulator-first-run.png)）；真机与 TestFlight 待开发者账号。
+> **Status:** M1 skeleton ✅ / M2 shared core + self-tests ✅ (82 assertions) / M3 app ✅ / M4 polish ✅ / M5 notifications + WidgetKit widget ✅. The repository records simulator build/run verification with Xcode 26.6 and iOS 26.5, plus free-signed device installation/run. TestFlight and App Store distribution still require an Apple Developer Program account. See [MOBILE-PLAN.md](../MOBILE-PLAN.md) for milestones, decisions and boundary rules.
 
-## ✨ Features (target)
+There is no public iOS binary in the Release page yet. Build the app from source with your own simulator or signing team.
 
-- 💰 **Balance card** on the overview tab (orange below 10, red below 1 — same semantics as the desktop menu bar)
-- 🔑 **One-click login**: embedded official sign-in page (WKWebView) with automatic token capture; manual paste fallback
-- 📊 **Usage details**: monthly / today cost, request count, output tokens, cache-hit tokens, per-model breakdown
-- 📈 **Token trend**: daily bar chart for the current month (output / cache-hit / total, switchable)
-- ⏱️ **Refresh**: on-open + pull-to-refresh + foreground timer (15s – 10min); BGAppRefreshTask best-effort background refresh
-- 🔔 (optional milestone) WidgetKit balance widget + local balance-threshold notification
+## Features
 
-## 📋 Requirements
+- Balance card with orange below 10 and red below 1, matching desktop semantics
+- One-click login in an official WKWebView, automatic token capture and manual-paste fallback
+- Monthly and today cost, request count, output tokens, cache-hit tokens and per-model breakdown
+- Daily current-month token chart for output, cache-hit or total tokens
+- Refresh on open, pull-to-refresh and a configurable foreground timer from 15 seconds to 10 minutes
+- Best-effort BGAppRefreshTask background refresh
+- Low-balance local notification; no push provider or third-party notification service
+- Snapshot-driven WidgetKit balance widget; the widget never receives or shares the token
 
-- Xcode 16+ (the project uses the Xcode 16 synchronized-folder format)
-- iOS 17.0+ deployment target
-- No third-party dependencies (system frameworks only)
+## Requirements
 
-## 🛠 Structure
+- Xcode 16 or later; the project uses the Xcode 16 synchronized-folder format
+- iOS 17.0 or later deployment target
+- A simulator build needs no signing. A physical-device build needs a development team and signing configuration.
+- System frameworks only; no third-party package dependency
+- Formal Team builds use DeepSeekMeter.entitlements for App Group group.com.deepseek.meter. Free personal-team builds use DeepSeekMeter.Free.entitlements, which deliberately has no App Group capability.
 
-```
-ios/
-  DeepSeekMeterCore/               Shared core Swift Package (zero third-party deps)
-    Sources/DeepSeekMeterCore/     PlatformService / Models / Formatting / TokenStoring / AppModel
-    Sources/DeepSeekMeterCoreSelftest/   Lightweight self-tests (no XCTest needed)
-  DeepSeekMeter/                   iOS app sources (SwiftUI)
-    TokenStore.swift               Keychain-backed TokenStoring
-    BackgroundRefreshService.swift BGAppRefreshTask scheduling + handler
-    NotificationService.swift       Low-balance local notification (pure local, no push)
-  DeepSeekMeterWidget/             WidgetKit balance widget extension (snapshot-driven, no token sharing)
-  DeepSeekMeter.entitlements       App Group (group.com.deepseek.meter) for widget snapshot
-  DeepSeekMeterWidgetInfo.plist    Widget extension Info.plist (NSExtensionPointIdentifier=com.apple.widgetkit-extension)
-    Views/                         HomeView (integrated balance/usage/trend) + TokenDailyChart + Settings + Login (WKWebView + in-app OAuth popups)
-    Assets.xcassets                AppIcon (1024, whale-girl flattened on deep-blue background)
-  DeepSeekMeter.xcodeproj          Xcode project (local package dependency on DeepSeekMeterCore)
-  Info.plist                       App Info.plist (UIBackgroundModes fetch + BGTaskSchedulerPermittedIdentifiers)
-```
+## Install and run from source
 
-## 🚀 Build & Test
+1. Install Xcode and an iOS Simulator runtime.
+2. Open ios/DeepSeekMeter.xcodeproj in Xcode.
+3. Select the DeepSeekMeter scheme and an iOS 17+ simulator, then Run. For a device, choose your own signing team under Signing & Capabilities.
+4. Log in on the official DeepSeek page. The app stores the token in Keychain.
 
-Core self-tests (runs on macOS, no Xcode needed):
+The project can also be built from the repository root without signing:
 
-```bash
-swift run --package-path ios/DeepSeekMeterCore DeepSeekMeterCoreSelftest
-```
+~~~bash
+# Core self-test, drift check, project structure check and optional app build
+bash Scripts/run-ios-tests.sh
 
-App (requires Xcode 16):
-
-```bash
-open ios/DeepSeekMeter.xcodeproj          # run from Xcode
-# or build from CLI without signing:
+# Full simulator build without signing
 xcodebuild -project ios/DeepSeekMeter.xcodeproj -scheme DeepSeekMeter \
   -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
-  CODE_SIGNING_ALLOWED=NO build
-```
+  -derivedDataPath ios/build CODE_SIGNING_ALLOWED=NO build
 
-## ✅ Local verification (2026-08-15)
+# Build, boot, install, launch and capture a simulator screenshot
+bash Scripts/run-ios-simulator.sh
+# Or select a device by name
+SIMULATOR_NAME='iPhone 17' bash Scripts/run-ios-simulator.sh
+~~~
 
-- Built with Xcode 26.6 (iOS 26.5 SDK): **DeepSeekMeter.app + DeepSeekMeterWidget.appex both compile** (main app + widget extension + embedded PlugIns).
-- App installed and running in the **iPhone 17 simulator**; home screen (integrated balance / usage / trend): [simulator-home-v2.png](screenshots/simulator-home-v2.png); earlier first-run: [simulator-first-run.png](screenshots/simulator-first-run.png).
-- UI layout: **2 tabs** (主页 integrated + 设置), visual style aligned with the macOS popover (status pill, gradient balance card, 万/亿 formatting, per-model rows, daily trend chart with peak/today footer).
-- Two blind-written compile issues were found and fixed during this first real build (background-task API signature change in Xcode 26; labeled tuple fallback).
+Core tests can run on macOS without Xcode:
 
-## ⚠️ Known limitations (M5)
+~~~bash
+swift run --package-path ios/DeepSeekMeterCore DeepSeekMeterCoreSelftest
+python3 Scripts/check-ios-project.py
+~~~
 
-- Background refresh uses `BGAppRefreshTask` (system-scheduled, best-effort — not guaranteed). The reliable paths are foreground refresh (on open, pull-to-refresh, foreground timer).
-- The widget shows the **last refreshed balance snapshot**; it updates when the app refreshes (not live). The token never enters the shared App Group container.
-- App Group capability must be enabled in Xcode (Signing & Capabilities) with a team before on-device widget testing; CI builds with `CODE_SIGNING_ALLOWED=NO` are unaffected.
-- TestFlight / App Store distribution requires an Apple Developer Program account (decision point D1 in MOBILE-PLAN.md).
+Scripts/run-ios-tests.sh also runs the macOS-to-iOS core drift check. If the macOS shared core changes, the corresponding files in ios/DeepSeekMeterCore must be synchronized before CI can pass.
 
-## 🔒 Privacy
+## Project structure
 
-Identical to the desktop versions: all data comes from DeepSeek's official platform APIs using **your own login token**; nothing is sent to any third party. On iOS the token is stored in the **Keychain** (the macOS app stores it in UserDefaults only because of ad-hoc signing; iOS apps are properly signed, so the Keychain does not prompt).
+~~~text
+ios/
+  DeepSeekMeterCore/                    shared Swift Package, zero third-party dependencies
+    Sources/DeepSeekMeterCore/          PlatformService / Models / Formatting / TokenStoring / AppModel
+    Sources/DeepSeekMeterCoreSelftest/  lightweight self-tests, no XCTest
+  DeepSeekMeter/                        SwiftUI app
+    TokenStore.swift                     Keychain-backed TokenStoring implementation
+    BackgroundRefreshService.swift       BGAppRefreshTask scheduling and handler
+    NotificationService.swift            local low-balance notification
+    Views/                               Home, usage/trend, settings and WKWebView login
+  DeepSeekMeterWidget/                  WidgetKit balance widget extension
+    BalanceWidget.swift                  snapshot-only balance presentation
+  DeepSeekMeter.entitlements             formal Team App Group group.com.deepseek.meter
+  DeepSeekMeter.Free.entitlements        free personal-team configuration without App Group
+  DeepSeekMeterWidgetInfo.plist          widget extension configuration
+  Info.plist                             background modes and permitted task identifier
+  DeepSeekMeter.xcodeproj                app and widget targets
+~~~
 
-## 🖼️ Icon assets
+## Recorded verification
 
-Planned: reuse the whale-girl money theme artwork from `windows/assets` (AI-generated for this project, not official DeepSeek material) — see [ATTRIBUTION](../windows/assets/ATTRIBUTION.md).
+- Xcode 26.6 with the iOS 26.5 SDK built both DeepSeekMeter.app and DeepSeekMeterWidget.appex, including the embedded widget extension.
+- The app was installed and run in an iPhone 17 simulator. See [simulator-home-v2.png](screenshots/simulator-home-v2.png) and [simulator-first-run.png](screenshots/simulator-first-run.png).
+- The current UI uses two tabs: an integrated home view for balance/usage/trend and a settings view.
+- A free-signed physical-device install/run is recorded in MOBILE-PLAN.md; App Store/TestFlight distribution is intentionally not claimed.
+
+## Known limitations
+
+- BGAppRefreshTask is system-scheduled and best-effort. Reliable refresh paths are app open, pull-to-refresh and the foreground timer.
+- The widget shows the latest balance snapshot written by the app. It is not live, does not call the network and does not contain a token.
+- Widget testing on a physical device requires enabling the App Group capability for both app and extension with a formal signing team. The free personal-team configuration intentionally omits App Group, so the app can run but the widget snapshot is unavailable or empty. Unsigned CI simulator builds are unaffected.
+- Notifications also require user authorization; disabling notification permission prevents local alerts.
+- No TestFlight/App Store package is published yet; distribution is the remaining account/signing step.
+
+## Privacy and storage
+
+All data comes from DeepSeek private platform endpoints using the user's own login session; the app has no third-party analytics, proxy or upload service. On iOS, the token is stored in the Keychain. The App Group contains only non-sensitive balance/usage snapshot data for the widget; the token never enters it. Local notifications require user authorization, and BGAppRefreshTask is system-scheduled best effort rather than a guaranteed refresh.
+
+## Icon assets
+
+The app icon is the flattened whale-girl money-themed artwork in DeepSeekMeter/Assets.xcassets. It is AI-generated for this project and is not an official DeepSeek icon or character asset. See [ATTRIBUTION](../windows/assets/ATTRIBUTION.md).

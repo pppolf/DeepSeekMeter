@@ -1,16 +1,16 @@
-# DeepSeekMeter 移动端规划（iOS 先行，Android 后续）
+# DeepSeekMeter 移动端规划（iOS / Android 实施与分发）
 
 > 本文档是 iOS / Android 移动端的**规划与实施方案**，供维护者评审后按里程碑执行。
 > 目标：与 macOS / Windows 版功能对齐，延续「平行实现 + 零第三方业务依赖 + 隐私承诺」的项目基因。
 
-**进度**：M1 骨架 ✅｜ M2 核心包 + 自测 ✅（82 项断言全绿）｜ M3 App 主体代码 ✅｜ M4 打磨代码 ✅｜ M5 ✅（通知 + WidgetKit 小组件）｜ **本地模拟器验证 ✅（Xcode 26.6 + iOS 26.5）与真机安装运行 ✅（免费签名）**｜ **Android A1 骨架 ✅ + A2 核心 ✅ + A3 Compose App 层 ✅（两 Tab 界面 + WebView 登录 + Keystore Token + Canvas 趋势图，本地构建 APK 通过，2026-08-16）**｜ **Android A4 ✅（前台轮询生命周期、WorkManager 后台刷新（D6 已决策）、低余额通知 + 权限三态 + 去重、WebView popup 承接、PR CI 构建 App、真机 QA 矩阵 22 项通过，2026-08-17）**｜ A5（Widget/商店分发）规划中｜ TestFlight/上架待决策点 D1。
+**进度**：M1 骨架 ✅｜ M2 核心包 + 自测 ✅（82 项断言全绿）｜ M3 App 主体代码 ✅｜ M4 打磨代码 ✅｜ M5 ✅（通知 + WidgetKit 小组件）｜ **核心自测、工程校验与无签名模拟器构建 ✅（Xcode 26.6 + iOS 26.5）**｜ **App 主体免费签名真机安装运行 ✅；App Group / Widget 完整真机验证需正式 Team**｜ **Android A1 骨架 ✅ + A2 核心 ✅ + A3 Compose App 层 ✅**｜ **Android A4 ✅（前台轮询生命周期、WorkManager 后台刷新（D6 已决策）、低余额通知 + 权限三态 + 去重、WebView popup 承接、PR CI 构建 App、维护者记录的真机 QA 矩阵 22 项通过）**｜ A5（Widget/商店分发）规划中｜ TestFlight/上架待决策点 D1。
 
 ---
 
 ## 1. 背景与目标
 
-- 现状：macOS 菜单栏版（SwiftUI + AppKit，Swift 6 工具链 / Swift 5 语言模式）+ Windows 托盘版（.NET 8 + WPF，功能对齐）。
-- 目标：新增 **iOS 手机 App**（先行），并规划 **Android 版**（后续），让用户随时在手机上查看 DeepSeek 账户余额、消费与 Token 用量。
+- 现状：macOS 菜单栏版（SwiftUI + AppKit，Swift 6 工具链 / Swift 5 语言模式）+ Windows 托盘版（.NET 8 + WPF，功能对齐）+ iOS / Android 移动端实现。
+- 目标：继续完善 **iOS 手机 App** 与 **Android App** 的验证和分发，让用户随时在手机上查看 DeepSeek 账户余额、消费与 Token 用量。
 - 原则：
   1. 功能与桌面版对齐：余额、本月/今日费用、请求数、Token（输出/缓存命中/缓存未命中）、按模型拆分、按天趋势图。
   2. 同一套平台接口契约：platform.deepseek.com 私有接口（4 个，均已用真实响应验证）。
@@ -113,7 +113,7 @@ ios/
 **Token 存储 —— Keychain（与 macOS 刻意不同）**：
 - macOS 存 UserDefaults 是因为 ad-hoc 签名下钥匙串每次启动弹密码授权（红线第 2 条的背景）。
 - iOS 侧 App 均有正式签名（App Store / TestFlight / 个人团队），**Keychain 不会弹窗**；且 iOS 没有「钥匙串弹窗」问题，明文放 UserDefaults 反而违背安全直觉。
-- 实现：kSecClassGenericPassword + kSecAttrAccessibleAfterFirstUnlock（后台刷新也能读）；小组件如需读余额，用 Keychain Access Group（同 TeamID 共享，kSecAttrAccessGroup），**不放 App Group UserDefaults 明文**。
+- 实现：kSecClassGenericPassword + kSecAttrAccessibleAfterFirstUnlock（后台刷新也能读）。当前小组件方案使用 App Group UserDefaults 保存**仅含余额、币种、更新时间的非敏感快照**；Token 永不进入 App Group。正式 Team 构建使用 DeepSeekMeter.entitlements，免费个人 Team 使用 DeepSeekMeter.Free.entitlements（无 App Group，因此小组件快照不可用）。如果未来改用 Keychain Access Group，应作为独立设计变更评审。
 - 退出登录：设置页清除 Keychain 项。
 
 ### 3.5 UI 界面规划（Tab 式，手机单窗）
@@ -132,7 +132,7 @@ ios/
 
 - 前台：进入 App 立即刷新 + 下拉刷新 + 前台定时器（15s~10min，沿用桌面设置）。
 - 后台：BGAppRefreshTask（系统调度、不保证触发，仅作「下次打开前的预刷新」）；不做常驻轮询（iOS 不允许）。
-- 可选增值：余额低于阈值触发**本地通知**（纯本地计算，无推送服务，不违反隐私承诺）。
+- M5 已实现：余额低于阈值触发**本地通知**（纯本地计算，无推送服务，不违反隐私承诺；是否展示取决于用户通知授权）。
 
 ### 3.7 测试、CI 与分发
 
@@ -236,8 +236,8 @@ android/
 | **M1 骨架** ✅ | 创建 ios/ 目录、核心包 Package.swift、Xcode 工程空壳、CI ios-build job（空壳构建通过）、.gitignore 补 iOS 产物 | CI 绿；本地核心自测可跑 |
 | **M2 核心** ✅ | 移植 PlatformService/Models/Formatting/MonthUsage/DataStatus + 自测全绿（移植 selftest 用例与样例 JSON，另加 URLProtocol Mock 请求头/错误归一化用例与 AppModel 状态机用例） | 核心自测 80 项断言全绿（退出码 0），覆盖与 macOS selftest 对齐 |
 | **M3 App 主体** ✅ | 登录（WKWebView + 手动兜底 + Keychain）、概览/用量/趋势/设置四 Tab、AppModel 状态机（收进核心包，注入 TokenStoring+URLSession，本地可测） | 状态机 82 项断言全绿；本地模拟器构建+运行+截图验证通过（Xcode 26.6） |
-| **M4 打磨与分发** ✅（代码） | 后台刷新（BGAppRefreshTask + 前台 + 下拉）、错误六态、图标（鲸鱼娘扁平化 1024）、OAuth 弹窗 App 内承接、刷新间隔持久化、隐私说明；TestFlight 内测（需开发者账号，决策点 D1） | 代码就绪；TestFlight 待 D1，App 层待 CI/真机验证 |
-| **M5 可选增值** ✅ | 余额阈值本地通知（NotificationService，设置页开关 + 刷新后检测，纯本地无推送）；WidgetKit 余额小组件（DeepSeekMeterWidget 扩展 target，**快照驱动**：App 刷新后写入 App Group UserDefaults，小组件只读展示、不联网、不共享 Token；App Group 标识 group.com.deepseek.meter） | 代码与工程结构就绪；待 CI/真机验证 |
+| **M4 打磨与分发** ✅（代码） | 后台刷新（BGAppRefreshTask + 前台 + 下拉）、错误六态、图标（鲸鱼娘扁平化 1024）、OAuth 弹窗 App 内承接、刷新间隔持久化、隐私说明；TestFlight 内测（需开发者账号，决策点 D1） | 代码与 CI 模拟器构建就绪；TestFlight 和正式 Team 真机验证待 D1 |
+| **M5 增值能力** ✅ | 余额阈值本地通知（NotificationService，设置页开关 + 刷新后检测，纯本地无推送，需用户授权）；WidgetKit 余额小组件（DeepSeekMeterWidget 扩展 target，**快照驱动**：App 刷新后写入 App Group UserDefaults，小组件只读余额/币种/更新时间，不联网、不共享 Token；正式 Team 使用 group.com.deepseek.meter；免费签名配置明确不启用 App Group） | 代码、工程结构与无签名模拟器验证就绪；App Group 完整真机验证待正式 Team |
 | **A1–A5** | Android 版同序列（核心 -> App -> 打磨 -> APK/上架 -> 可选小组件）；核心迁移规格见 4.5，iOS 自测用例与样例 JSON 直接复用 | 与 iOS 功能对齐 |
 
 **推荐顺序**：iOS 先行（与现有代码同语言，核心共享成本最低）；Android 在 iOS M3 稳定后启动，可复用 iOS 的测试用例清单与文档。

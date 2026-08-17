@@ -4,124 +4,178 @@
 [![License](https://img.shields.io/github/license/pppolf/DeepSeekMeter)](LICENSE)
 [![CI](https://github.com/pppolf/DeepSeekMeter/actions/workflows/ci.yml/badge.svg)](https://github.com/pppolf/DeepSeekMeter/actions/workflows/ci.yml)
 ![macOS](https://img.shields.io/badge/macOS-14%2B-blue)
-![Windows](https://img.shields.io/badge/Windows-10%2B-blue)
+![Windows](https://img.shields.io/badge/Windows-10%201809%2B-blue)
+![Android](https://img.shields.io/badge/Android-8.0%2B-green)
+![iOS](https://img.shields.io/badge/iOS-17%2B-lightgrey)
+
 [English](README.md)
 
-一个轻量的 **macOS 菜单栏小工具**：实时查看 DeepSeek 账户的余额、消费和 Token 用量。点击菜单栏图标弹出悬浮窗，数据一目了然。同时提供**功能对齐的 Windows 版**（系统托盘，代码在 [`windows/`](windows/README.md)）与**开发中的 iOS 版**（代码在 [`ios/`](ios/README.md)，规划见 [MOBILE-PLAN.md](MOBILE-PLAN.md)）。
+DeepSeekMeter 是一个轻量、注重隐私的账户监视工具，覆盖 **macOS、Windows、Android**，并在同一仓库提供**开发中的 iOS 源码实现**。它展示 DeepSeek 余额、消费、请求/Token 用量和按天趋势，不把数据发送给任何第三方。
 
-## ✨ 功能
+当前最新稳定版本是 **[v0.3.1](https://github.com/pppolf/DeepSeekMeter/releases/tag/v0.3.1)**。macOS、Windows 和 Android 发布产物由 GitHub Actions 根据版本标签构建；iOS 目前只提供源码，TestFlight/App Store 分发等待 Apple Developer 账号。
 
-- 🖥️ **菜单栏余额**：菜单栏直接显示当前余额；低于 10 变橙色、低于 1 变红色
-- 🔑 **一键登录**：内嵌官方登录页，登录一次即可自动获取并保存登录态，全程不用开发者工具
-- 📊 **用量明细**：本月/今日费用、请求数、输出 Token、缓存命中，按模型拆分
-- 📈 **Token 用量趋势**：本月按天的 Token 用量柱状图（输出 / 缓存命中 / 总量可切换）
-- ⏱️ **定时刷新**：15 秒 ~ 10 分钟可选
-- 🚀 **开机自启**
+## 平台状态与下载
 
-## 📸 截图
+| 平台 | 当前状态 | 最新发布 / 运行方式 |
+| :--- | :--- | :--- |
+| macOS | 稳定版菜单栏 App | [DeepSeekMeter-0.3.1-macOS.dmg](https://github.com/pppolf/DeepSeekMeter/releases/tag/v0.3.1) |
+| Windows | 稳定版系统托盘 App | [DeepSeekMeter-win-x64.zip](https://github.com/pppolf/DeepSeekMeter/releases/tag/v0.3.1) |
+| Android | A4 已完成；提供直装 APK | [DeepSeekMeter-v0.3.1-android.apk](https://github.com/pppolf/DeepSeekMeter/releases/tag/v0.3.1) |
+| iOS | M1–M5 源码实现完成，尚未公开分发 | 从 [ios/](ios/README.zh-CN.md) 源码构建 |
 
-| 已登录：余额、用量明细与 Token 趋势 | 未登录：一键登录引导 |
-| :---: | :---: |
-| ![已登录](images/pic-1.png) | ![未登录](images/pic-2.png) |
+## 功能
 
-## 📋 环境要求
+### 共通能力
 
-- **macOS**：macOS 14+（Apple Silicon / Intel 均可）；Xcode Command Line Tools（`xcode-select --install`）——仅源码构建需要
-- **Windows**：Windows 10（1809+）/ 11；从 Release 下载 ZIP 无需安装任何东西（自包含版本已打包 .NET 运行时，WebView2 Runtime 随系统预装）；仅源码构建需要 [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0)
+- 展示余额和钱包币种
+- 内嵌 DeepSeek 官方登录页，自动提取登录态 Token；支持的平台提供手动粘贴兜底
+- 本月/今日费用、请求数、输出 Token、缓存命中 Token 和按模型拆分
+- 本月按天 Token 趋势（输出 / 缓存命中 / 总量）
+- 桌面端和移动端前台页面支持 15 秒至 10 分钟的刷新间隔
+- 数据只在本机与 DeepSeek 官方接口之间流转，无统计 SDK、代理或第三方上报
 
-## ⬇️ 安装
+### 平台能力
 
-### 从 Release 下载（推荐）
+- **macOS**：菜单栏余额、悬浮窗、开机自启
+- **Windows**：系统托盘余额颜色、WebView2 登录、当前用户开机自启
+- **Android**：跟随生命周期的前台轮询、WorkManager 尽力而为后台刷新、余额低阈值本地通知
+- **iOS**：SwiftUI App、Keychain Token 存储、前后台刷新、余额低阈值本地通知、快照驱动的 WidgetKit 余额小组件
 
-1. 在 [Releases 页面](https://github.com/pppolf/DeepSeekMeter/releases) 下载最新的 `DeepSeekMeter-<版本>-macOS.dmg`
-2. 打开 DMG，把 `DeepSeekMeter.app` **拖到 `Applications` 快捷方式上**
-3. 首次启动：右键 App → **打开**（App 为 ad-hoc 签名，Gatekeeper 会询问一次；或用 `xattr -dr com.apple.quarantine /Applications/DeepSeekMeter.app` 解除）
+## 截图
 
-> **为什么提示「Apple 无法验证」？** 因为 App 目前是免费的 ad-hoc 签名（没有付费 Apple 开发者账号），下载副本会被 Gatekeeper 拦截。彻底消除需要**付费的 Apple Developer Program**：用你的 **Developer ID 证书**签名并公证：
+| macOS — 已登录 | macOS — 登录提示 | iOS 模拟器 |
+| :---: | :---: | :---: |
+| ![macOS 已登录](images/pic-1.png) | ![macOS 登录提示](images/pic-2.png) | ![iOS 模拟器](ios/screenshots/simulator-home-v2.png) |
 
-> ```bash
-> APPLE_ID=you@example.com \
-> APP_PASSWORD=xxxx-xxxx-xxxx-xxxx \
-> TEAM_ID=ABCDE12345 \
-> ./Scripts/notarize.sh build/DeepSeekMeter.app
-> ```
->
-> （APP_PASSWORD 是 appleid.apple.com 生成的「App 专用密码」；build-app.sh 检测到开发者证书时会自动改用 Developer ID 签名。）
+## 环境要求
 
-### 从源码构建
+| 平台 | 普通用户 | 源码构建 |
+| :--- | :--- | :--- |
+| macOS | macOS 14+，Apple Silicon 或 Intel | Xcode Command Line Tools；macOS target 不要求完整 Xcode |
+| Windows | Windows 10 1809+ / Windows 11；Release ZIP 自包含 | .NET 8 SDK；内嵌登录页通常可使用 WebView2 Runtime，若初始化失败可安装 Runtime 或使用手动 Token 兜底 |
+| Android | Android 8.0 / API 26+；Release APK 可直装 | JDK 17、Android SDK platform 35；仓库 wrapper 会自动下载 Gradle 8.14.2 |
+| iOS | 暂无公开二进制包 | Xcode 16+、iOS 17 部署目标；真机分发需要 Apple Developer 签名 |
 
-```bash
-swift run                       # 开发模式直接跑
-./Scripts/build-app.sh          # 构建 build/DeepSeekMeter.app
-./Scripts/install.sh            # 构建 + 安装到 /Applications 并启动
-```
+## 安装与运行
 
-### Windows 下载（推荐）
+### macOS
 
-1. 在 [Releases 页面](https://github.com/pppolf/DeepSeekMeter/releases) 下载 `DeepSeekMeter-win-x64.zip`
-2. 解压到任意目录，双击 `DeepSeekMeter.exe` 运行（无需安装 .NET SDK）
+1. 在 [Releases 页面](https://github.com/pppolf/DeepSeekMeter/releases) 下载最新 DeepSeekMeter-<版本>-macOS.dmg。
+2. 打开 DMG，将 DeepSeekMeter.app 拖到 Applications 快捷方式上。
+3. 首次启动时右键 App → **打开**。Release 使用 ad-hoc 签名，Gatekeeper 会询问一次；要面向普通用户消除提示，需要 Developer ID 签名并完成公证。
+4. 点击菜单栏鲸鱼图标，选择「登录」。
 
-### Windows 从源码构建
+### Windows
 
-```powershell
+1. 在 [Releases 页面](https://github.com/pppolf/DeepSeekMeter/releases) 下载 DeepSeekMeter-win-x64.zip。
+2. 解压后运行 DeepSeekMeter.exe；自包含 Release 不需要 .NET SDK。
+3. 如果内嵌 WebView2 登录不可用，可使用内置「手动粘贴 Token」兜底。
+
+详见 [Windows 使用与构建说明](windows/README.zh-CN.md)。
+
+### Android
+
+1. 在 [v0.3.1 Release](https://github.com/pppolf/DeepSeekMeter/releases/tag/v0.3.1) 下载 DeepSeekMeter-v0.3.1-android.apk。
+2. 以侧载 APK 方式安装；Android 可能要求允许打开该文件的应用安装未知来源应用。
+3. APK 使用 debug 签名，便于直装，不代表 Play 商店发布或发布者身份认证。
+
+详见 [Android 使用与构建说明](android/README.zh-CN.md)。
+
+### iOS
+
+iOS 暂无公开二进制包。打开 [ios/](ios/README.zh-CN.md) 下的 Xcode 工程，选择模拟器或配置签名 Team 后运行。TestFlight/App Store 分发属于后续工作。
+
+## 从源码构建
+
+以下命令均在仓库根目录执行：
+
+~~~bash
+# macOS
+swift build
+swift build -c release
+bash Scripts/run-tests.sh
+bash Scripts/build-app.sh release
+
+# Windows（PowerShell）
 dotnet build windows/DeepSeekMeter.sln -c Release
 dotnet run --project windows/src/DeepSeekMeter -c Release
-```
+pwsh Scripts/publish-windows.ps1
 
-发布自包含 ZIP：
+# Android
+cd android
+./gradlew :core:test :app:assembleDebug
+./gradlew :app:assembleRelease
+cd ..
 
-```powershell
-pwsh Scripts/publish-windows.ps1    # 生成 windows/publish/DeepSeekMeter-win-x64.zip
-```
+# iOS 核心与工程校验（核心校验不要求 Xcode）
+bash Scripts/run-ios-tests.sh
+# 模拟器构建/安装/运行，需要 Xcode 和 iOS 运行时
+bash Scripts/run-ios-simulator.sh
+~~~
 
-详见 [windows/README.md](windows/README.md)。
+平台专项说明：[Windows](windows/README.zh-CN.md)、[iOS](ios/README.zh-CN.md)、[Android](android/README.zh-CN.md)。
 
-> Windows 端鲸鱼娘金钱主题图标由 AI 为本项目生成，并非 DeepSeek 官方图标或官方角色素材；DeepSeek 相关名称、商标及官方品牌资产归其权利人所有（详见 [windows/assets/ATTRIBUTION.zh-CN.md](windows/assets/ATTRIBUTION.zh-CN.md)）。
+## 快速开始
 
-## 🚀 快速开始
+启动桌面或移动端版本后：
 
-1. 启动应用，菜单栏出现 🐳 图标
-2. 点击图标 → 点「**登录**」
-3. 在内嵌的官方页面（[platform.deepseek.com](https://platform.deepseek.com)）登录（密码或扫码）
-4. 完成！悬浮窗立即显示余额和本月用量
+1. 打开 App，选择「登录」。
+2. 在官方 platform.deepseek.com 页面使用密码或扫码登录。
+3. 回到 App，余额和当前用量快照会自动加载。
+4. 如果登录态过期，选择「重新登录」；退出登录会清除本机保存的 Token。
 
-> 登录态 Token 保存在本机 App 偏好文件中；过期后悬浮窗会提示「登录已过期」，点「重新登录」一键恢复。
+## 隐私与数据
 
-## 🔒 隐私与数据
+- 请求由 App 直接发往 DeepSeek 私有平台接口：/auth-api/v0/users/current、/api/v0/users/get_user_summary、/api/v0/usage/by_api_key/amount、/api/v0/usage/by_api_key/cost。这些不是公开 API 契约，平台聚合本身可能存在统计延迟。
+- App 不会把 Token、余额、用量、遥测或分析数据发送给本项目维护者或任何其他第三方。
+- Token 按平台存储：macOS UserDefaults（路径为 ~/Library/Preferences/com.deepseek.meter.plist）、Windows DPAPI 保护的设置、iOS Keychain、Android Keystore 加密后写入 SharedPreferences 的密文。
+- iOS 小组件只从 App Group 读取非敏感余额快照；Android 后台任务不会通过 WorkManager 输入数据接收 Token。
+- 不要把真实 Token 粘贴到源码、Issue、日志或截图中。
 
-- 所有数据均来自 DeepSeek 官方平台接口（`get_user_summary` / `usage/by_api_key/amount` / `usage/by_api_key/cost`），使用**你自己的登录态**获取，不会发送到任何第三方
-- Token 只保存在本机 `~/Library/Preferences/com.deepseek.meter.plist`；悬浮窗「退出登录」可随时清除
-- 用量/费用统计**实时更新**（`usage/by_api_key/*` 接口）；余额为实时扣减
+## 仓库结构
 
-## 🛠 开发
+~~~text
+Sources/DeepSeekMeter/       macOS SwiftUI + AppKit 菜单栏 App
+windows/                     .NET 8 + WPF 系统托盘实现
+  README.md                  Windows 英文说明
+  README.zh-CN.md            Windows 中文说明
+ios/                         iOS SwiftUI App、WidgetKit 扩展与共享核心
+android/                     Android Compose App 与零 AndroidX 核心模块
+Scripts/                     构建、打包、自测与移动端校验脚本
+MOBILE-PLAN.md               移动端里程碑、决策与边界规则
+.github/workflows/            macOS/Windows/iOS/Android CI 与标签发布流水线
+~~~
 
-```
-Sources/DeepSeekMeter/           App 源码（SwiftUI + AppKit）
-  Views/                         悬浮窗 UI
-  LoginWindowController.swift    内嵌登录页 + Token 自动提取
-  PlatformService.swift          平台接口客户端
-Scripts/                         构建 / 安装 / 图标 / 自测脚本
-Scripts/selftest/                轻量单元测试（无需 Xcode）
-windows/                         Windows 版（.NET 8 + WPF，详见 windows/README.md）
-ios/                             iOS 版（开发中，详见 ios/README.md）
-```
+## 测试与 CI
 
-```bash
-./Scripts/run-tests.sh           # 运行 macOS 自测
-dotnet run --project windows/tests/DeepSeekMeter.Selftest -c Release   # 运行 Windows 自测
-```
+~~~bash
+# macOS
+bash Scripts/run-tests.sh
 
-## ❓ 常见问题
+# Windows
+dotnet run --project windows/tests/DeepSeekMeter.Selftest -c Release
 
-- **Token 过期了？** 悬浮窗点「重新登录」，一键重登即可。
-- **菜单栏没有图标？** 检查「活动监视器」里是否有 `DeepSeekMeter` 进程，或重新 `./Scripts/install.sh`。
-- **如何退出？** 菜单栏图标 → 悬浮窗「退出」。
-- **如何卸载？** 删除 `/Applications/DeepSeekMeter.app` 和 `~/Library/Preferences/com.deepseek.meter.plist`。
+# iOS 核心、漂移与工程校验
+bash Scripts/run-ios-tests.sh
 
-## 🤝 贡献
+# Android JVM 单测与 debug App 构建
+cd android && ./gradlew :core:test :app:assembleDebug
+~~~
 
-欢迎贡献！请先阅读 [CONTRIBUTING.zh-CN.md](CONTRIBUTING.zh-CN.md)（英文版见 [CONTRIBUTING.md](CONTRIBUTING.md)）——包含构建/测试命令、代码与提交规范，以及项目边界。使用 AI 编码助手时，它会遵循仓库根目录 [AGENTS.md](AGENTS.md) 的操作规范。
+每个 Pull Request 和 main push 都会运行平台 CI。推送 v* 标签会启动发布流水线，构建 macOS DMG、Windows 自包含 ZIP 和 Android APK，并附加到 GitHub Release。iOS 模拟器产物会在 CI 中校验，但暂不作为用户下载包发布。
 
-## 📄 开源协议
+## 常见问题
+
+- **Token 过期了。** 点「重新登录」，App 会通过官方页面重新认证。
+- **桌面图标不见了。** 检查进程是否运行，再按对应平台的安装说明重装；macOS 是纯菜单栏 App，不会显示 Dock 图标。
+- **Android 没有通知。** 在系统设置中允许 App 通知；后台投递受 WorkManager 和系统调度影响，属于尽力而为。
+- **如何卸载？** 删除 App 及本机数据：macOS 的 ~/Library/Preferences/com.deepseek.meter.plist、Windows 的 %APPDATA%/DeepSeekMeter 与 %LOCALAPPDATA%/DeepSeekMeter，或清除/卸载 Android App 数据；iOS 删除 App 即可。
+- **iOS 为什么没有 TestFlight？** 源码实现已就绪，但签名与分发仍需要 Apple Developer Program 账号。
+
+## 贡献
+
+欢迎贡献。请先阅读 [CONTRIBUTING.md](CONTRIBUTING.md)，中文版见 [CONTRIBUTING.zh-CN.md](CONTRIBUTING.zh-CN.md)，其中包含构建/测试命令、提交规范和项目边界。AI 编码助手还应遵循 [AGENTS.md](AGENTS.md)。
+
+## 开源协议
 
 [MIT](LICENSE) © 2026 pppolf

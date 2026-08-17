@@ -9,10 +9,10 @@ DeepSeekMeter 是一个 **macOS 菜单栏小工具**（SwiftUI + AppKit）：实
 
 - 工具链：Swift 6（swift-tools-version 6.0），**Swift 5 语言模式**（Package.swift 中显式设置）
 - 平台：macOS 14+（Apple Silicon / Intel 均可），仅 macOS，无 iOS/iPadOS
-- 移动端：iOS 版（`ios/`，开发中）与 Android 版（规划中），总体方案见 MOBILE-PLAN.md
+- 移动端：iOS 版（`ios/`，M1–M5 代码完成，分发待账号）与 Android 版（`android/`，A4 完成，A5 规划中），总体方案见 MOBILE-PLAN.md
 - 构建：Swift Package Manager，**无 Xcode 工程、无任何第三方依赖、单 target**（仅指 macOS 包；iOS 工程在 `ios/` 内，见第 8 节红线 13）
 - 测试：轻量自测（swiftc 直接编译运行，**不依赖 XCTest**）
-- CI：GitHub Actions（push main / PR 触发）；发布：打 `v*` 标签自动出 DMG Release
+- CI：GitHub Actions（push main / PR 触发，覆盖 macOS / Windows / iOS / Android）；发布：打 `v*` 标签自动出 macOS DMG、Windows ZIP 和 Android APK Release
 - 用户文档：README.md（英文）+ README.zh-CN.md（中文），双语惯例
 
 ## 2. 常用命令（改动后必须本地验证）
@@ -61,23 +61,24 @@ windows/                         Windows 版（.NET 8 + WPF，与 macOS 版功�
   src/DeepSeekMeter.Core/        纯逻辑库：Models / Formatting / PlatformService / SettingsStore
   src/DeepSeekMeter/             WPF 应用：MainViewModel / TrayIconController / PopoverWindow / LoginWindow 等
   tests/DeepSeekMeter.Selftest/  轻量自测（控制台，零测试框架）
-  README.md                      Windows 版说明（含与 macOS 版对应关系）
+  README.md                      Windows 英文说明（含与 macOS 版对应关系）
+  README.zh-CN.md                Windows 中文说明
 ios/                             iOS 版（开发中，详见 MOBILE-PLAN.md）
   DeepSeekMeterCore/             共享核心 Swift Package（PlatformService / Models / Formatting / TokenStoring / AppModel，零第三方依赖；AppModel 注入 TokenStoring+URLSession，可在 macOS 上自测）
   DeepSeekMeter.xcodeproj        iOS App 工程（SwiftUI，Xcode 16 同步文件夹格式）
   DeepSeekMeter/                 iOS App 源码（AppMain / TokenStore(Keychain) / Views/ / NotificationService / BackgroundRefreshService）
   DeepSeekMeterWidget/            WidgetKit 余额小组件（快照驱动；Token 不进 App Group 共享容器）
   DeepSeekMeterCore/Sources/DeepSeekMeterCoreSelftest/  核心轻量自测（swift run 直接跑，不依赖 XCTest）
-android/                         Android 版（开发中，详见 MOBILE-PLAN.md 第 4 节）
+android/                         Android 版（A4 已完成，A5 规划中，详见 MOBILE-PLAN.md 第 4 节）
   core/                          纯逻辑核心模块（Kotlin，零第三方业务依赖；org.json 手写映射）
   core/src/test/                 本地 JVM 单测（无需设备；org.json 测试期用官方 jar 替身）
 Scripts/
-  build-app.sh / install.sh / notarize.sh / run-tests.sh / run-ios-tests.sh / make-icon.sh / generate-icon.swift
+  build-app.sh / install.sh / notarize.sh / publish-windows.ps1 / run-tests.sh / run-ios-tests.sh / make-icon.sh / generate-icon.swift
   Info.plist                     应用包信息（**版本号在这里改**）
   selftest/main.swift            轻量自测源码（swiftc 编译运行）
 .github/workflows/
-  ci.yml                         push main / PR：macOS（构建+自测+打包+冒烟）+ Windows（构建+自测+冒烟）
-  release.yml                    打 v* 标签：构建 DMG 并发布 GitHub Release
+  ci.yml                         push main / PR：macOS、Windows、iOS、Android 构建与自测
+  release.yml                    打 v* 标签：构建 macOS DMG、Windows ZIP、Android APK 并发布 GitHub Release
 ```
 
 ## 4. 架构分层（改动必须遵循）
@@ -126,10 +127,10 @@ Foundation / AppKit / SwiftUI / WebKit
 
 ## 7. 发布流程（维护者）
 
-1. 更新 `Scripts/Info.plist` 的 `CFBundleShortVersionString` 与 `CFBundleVersion`
+1. 更新 `Scripts/Info.plist` 的 `CFBundleShortVersionString` 与 `CFBundleVersion`，并同步 Android `versionName`/`versionCode` 与 Windows 项目程序集版本
 2. 本地 `bash Scripts/build-app.sh release` 验证
 3. 打标签推送：`git tag v0.1.0 && git push origin v0.1.0`
-4. release.yml 自动构建 DMG 并发布 Release（notes 自动生成）
+4. release.yml 自动构建 macOS DMG、Windows ZIP 和 Android APK 并发布 Release（notes 自动生成；iOS 暂不发布二进制）
 5. （可选）有 Developer ID 证书时用 `Scripts/notarize.sh` 公证后重新发布
 
 ## 8. 边界（红线，AI 不得越界）
